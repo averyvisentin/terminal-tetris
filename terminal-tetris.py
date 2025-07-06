@@ -1,7 +1,27 @@
+#!/usr/bin/env python3
+"""
+Terminal Tetris Game
+A fully-featured Tetris implementation for the terminal with modern mechanics.
+
+Features:
+- Classic Tetris gameplay with proper mechanics
+- T-Spin detection and scoring
+- Back-to-back bonus system
+- Hold functionality
+- Ghost piece preview
+- High score tracking
+- Level progression
+- Proper lock delay
+- Bag randomization system
+
+Author: avery
+"""
+
 # Import necessary libraries
 import time  # For handling time-based events like gravity and lock delays
 import random  # For shuffling the bag of tetrominoes
 import os  # For handling file operations, specifically for the high score file
+from typing import List, Tuple, Optional, Any
 from blessed import Terminal  # A library to make terminal output colorful, styled, and positioned
 
 # --- Game Configuration & Constants ---
@@ -18,6 +38,18 @@ PLAYFIELD_Y_OFFSET = 2
 # High score configuration
 HIGHSCORE_FILE = 'highscores.txt'  # The name of the file where scores are saved
 MAX_SCORES = 5  # The maximum number of high scores to keep track of
+
+# Game timing and input configuration
+INITIAL_GRAVITY_INTERVAL = 0.8  # Starting gravity speed in seconds
+GRAVITY_LEVEL_MULTIPLIER = 0.05  # How much faster gravity gets per level
+MIN_GRAVITY_INTERVAL = 0.05  # Minimum gravity interval (maximum speed)
+INPUT_TIMEOUT = 0.01  # Timeout for input polling in seconds
+RENDER_THROTTLE_MS = 16  # Minimum milliseconds between renders (~60 FPS)
+
+# Level and name configuration
+MIN_LEVEL = 1
+MAX_LEVEL = 15
+MAX_NAME_LENGTH = 3  # Maximum characters for player name
 
 # Tetromino shapes and their colors.
 # Each shape is a dictionary key ('I', 'O', 'T', etc.).
@@ -87,39 +119,50 @@ EMPTY_CHAR = '  '   # Represents an empty cell on the board
 
 # --- High Score Management ---
 
-def load_high_scores():
+def load_high_scores() -> List[Tuple[int, str]]:
     """Loads high scores from the specified file."""
-    # If the high score file doesn't exist, return an empty list.
-    if not os.path.exists(HIGHSCORE_FILE): return []
+    if not os.path.exists(HIGHSCORE_FILE):
+        return []
+
     scores = []
-    # Open the file for reading.
-    with open(HIGHSCORE_FILE, 'r') as f:
-        for line in f:
-            try:
-                # Each line is expected to be "NAME SCORE". We split it and store it.
-                name, score = line.strip().split()
-                # We store the score first in the tuple for easier sorting.
-                scores.append((int(score), name))
-            except ValueError:
-                # If a line is malformed, skip it.
-                continue
-    # Sort scores in descending order (highest score first).
-    scores.sort(key=lambda item: item[0], reverse=True)
-    return scores
+    try:
+        with open(HIGHSCORE_FILE, 'r') as f:
+            for line in f:
+                try:
+                    # Each line is expected to be "NAME SCORE". We split it and store it.
+                    name, score = line.strip().split()
+                    scores.append((int(score), name))
+                except ValueError:
+                    # Skip lines that don't have the expected format.
+                    continue
+    except IOError:
+        # If file can't be read, return empty list
+        return []
 
-def save_high_scores(scores):
+    # Sort by score in descending order (highest first).
+    scores.sort(key=lambda item: item[0], reverse=True)
+    return scores[:MAX_SCORES]
+
+def save_high_scores(scores: List[Tuple[int, str]]) -> bool:
     """Saves the provided list of scores to the high score file."""
-    # Sort the scores just in case they aren't already.
-    scores.sort(key=lambda item: item[0], reverse=True)
-    # Open the file in write mode, which overwrites the existing file.
-    with open(HIGHSCORE_FILE, 'w') as f:
-        # Write only the top scores, up to MAX_SCORES.
-        for score, name in scores[:MAX_SCORES]:
-            f.write(f"{name} {score}\n")
+    try:
+        # Sort the scores just in case they aren't already.
+        scores.sort(key=lambda item: item[0], reverse=True)
+        # Open the file in write mode, which overwrites the existing file.
+        with open(HIGHSCORE_FILE, 'w') as f:
+            # Write only the top scores, up to MAX_SCORES.
+            for score, name in scores[:MAX_SCORES]:
+                f.write(f"{name} {score}\n")
+        return True
+    except IOError:
+        # If file can't be written, return False
+        return False
 
-def _display_high_scores_list(term, start_y):
-    """A helper function to print the high score list on the screen."""
-    # `term.move_y(y)` moves the cursor to a specific row. `term.center()` centers the text.
+def _display_high_scores_list(term: Terminal, start_y: int) -> int:
+    """A helper function to print the high score list on the screen.
+
+    Returns the number of lines used for the high score display.
+    """
     print(term.move_y(start_y) + term.center(term.underline("Top 5 High Scores")))
     scores_to_show = load_high_scores()
     if not scores_to_show:
@@ -137,24 +180,25 @@ def _display_high_scores_list(term, start_y):
 
 class Piece:
     """Represents a single tetromino piece (I, O, T, etc.)."""
-    def __init__(self, shape_name):
-        """Initializes a new piece with its shape, color, and default position."""
-        self.shape_name = shape_name
-        self.shape_matrices = SHAPES[shape_name]  # Get the rotation matrices from the SHAPES constant
-        self.color = PIECE_COLORS[shape_name]
-        self.rotation = 0  # Start at the first rotation (index 0)
-        # Start the piece horizontally centered and slightly above the visible board.
-        self.x = BOARD_WIDTH // 2 - 2
-        self.y = -2
 
-    def get_current_shape_matrix(self):
+    def __init__(self, shape_name: str):
+        """Initializes a new piece with its shape, color, and default position."""
+        self.shape_name: str = shape_name
+        self.shape_matrices: List[List[str]] = SHAPES[shape_name]  # Get the rotation matrices from the SHAPES constant
+        self.color: str = PIECE_COLORS[shape_name]
+        self.rotation: int = 0  # Start at the first rotation (index 0)
+        # Start the piece horizontally centered and slightly above the visible board.
+        self.x: int = BOARD_WIDTH // 2 - 2
+        self.y: int = -2
+
+    def get_current_shape_matrix(self) -> List[str]:
         """Returns the 5x5 string matrix for the piece's current rotation."""
         return self.shape_matrices[self.rotation]
 
-    def get_block_locations(self):
-        """
-        Calculates the absolute (x, y) board coordinates of each of the piece's four blocks.
-        It translates the 'O' characters from the 5x5 local matrix to global board coordinates.
+    def get_block_locations(self) -> List[Tuple[int, int]]:
+        """Calculates the absolute (x, y) board coordinates of each of the piece's four blocks.
+
+        Translates the 'O' characters from the 5x5 local matrix to global board coordinates.
         """
         positions = []
         shape = self.get_current_shape_matrix()
@@ -168,30 +212,31 @@ class Piece:
 
 class Game:
     """Manages the entire state and logic of the Tetris game."""
-    def __init__(self, start_level=1):
+
+    def __init__(self, start_level: int = 1):
         """Initializes the game board, score, level, and pieces."""
         # The board is a 2D list (grid). 0 means empty, a shape name (e.g., 'T') means a locked block.
-        self.board = [[0 for _ in range(BOARD_WIDTH)] for _ in range(BOARD_HEIGHT)]
-        self.score = 0
-        self.lines_cleared = 0
-        self.level = start_level
-        self.game_over = False
-        self.paused = False
+        self.board: List[List[Any]] = [[0 for _ in range(BOARD_WIDTH)] for _ in range(BOARD_HEIGHT)]
+        self.score: int = 0
+        self.lines_cleared: int = 0
+        self.level: int = start_level
+        self.game_over: bool = False
+        self.paused: bool = False
 
         # The "bag" system ensures all 7 pieces appear once before any piece repeats.
-        self.bag = []
+        self.bag: List[str] = []
         self._refill_bag()
 
         # The active piece, the upcoming piece, and the piece in the hold slot.
-        self.current_piece = self._new_piece()
-        self.next_piece = self._new_piece()
-        self.hold_piece = None
-        self.can_hold = True  # You can only hold once per piece.
+        self.current_piece: Piece = self._new_piece()
+        self.next_piece: Piece = self._new_piece()
+        self.hold_piece: Optional[Piece] = None
+        self.can_hold: bool = True  # You can only hold once per piece.
 
         # --- State for advanced mechanics ---
-        self.is_back_to_back = False  # True if the last clear was a Tetris or T-Spin
-        self.last_move_was_rotation = False # Used to check for T-Spins
-        self.lock_delay_start_time = 0  # Timestamp for when the lock delay started
+        self.is_back_to_back: bool = False  # True if the last clear was a Tetris or T-Spin
+        self.last_move_was_rotation: bool = False # Used to check for T-Spins
+        self.lock_delay_start_time: float = 0  # Timestamp for when the lock delay started
 
     def _refill_bag(self):
         """Fills the bag with one of each of the 7 pieces and shuffles it."""
@@ -562,42 +607,77 @@ def draw_game_state(term, game):
         msg = "PAUSED"
         print(term.move_xy(PLAYFIELD_X_OFFSET + BOARD_WIDTH - len(msg)//2, PLAYFIELD_Y_OFFSET + BOARD_HEIGHT//2) + term.black_on_white(msg))
 
-def game_loop(term, game):
+def handle_input(term: Terminal, game: Game) -> bool:
+    """Handle keyboard input and return True if game should continue."""
+    key = term.inkey(timeout=INPUT_TIMEOUT)
+    if not key:
+        return True
+
+    if not game.paused:
+        # Handle piece movement controls.
+        if key.code == term.KEY_LEFT:
+            game.move(-1)
+        elif key.code == term.KEY_RIGHT:
+            game.move(1)
+        elif key.code == term.KEY_UP:
+            game.rotate()
+        elif key.code == term.KEY_DOWN:
+            game.soft_drop()
+        elif key == ' ':
+            game.hard_drop()
+        elif key.lower() == 'c':
+            game.hold()
+
+    # These controls work even when paused.
+    if key.lower() == 'p':
+        game.paused = not game.paused
+    elif key.lower() == 'q':
+        game.game_over = True
+        return False
+
+    return True
+
+def apply_gravity(game: Game, last_gravity_time: float) -> float:
+    """Apply gravity to the current piece and return updated gravity time."""
+    if game.paused:
+        return last_gravity_time
+
+    current_time = time.time()
+    # Gravity gets faster as the level increases.
+    gravity_interval = max(MIN_GRAVITY_INTERVAL, INITIAL_GRAVITY_INTERVAL - (game.level - 1) * GRAVITY_LEVEL_MULTIPLIER)
+
+    # If enough time has passed, move the piece down one step due to gravity.
+    if current_time - last_gravity_time > gravity_interval:
+        if not game._is_touching_ground():
+            game.current_piece.y += 1
+        return current_time
+
+    return last_gravity_time
+
+def game_loop(term: Terminal, game: Game) -> None:
     """Contains the main loop that runs the game, handling input, updates, and drawing."""
     last_gravity_time = time.time()
+    last_render_time = time.time()
 
     while not game.game_over:
-        # `term.inkey()` checks for keyboard input with a short timeout. It's non-blocking.
-        key = term.inkey(timeout=0.01)
-        if key:
-            if not game.paused:
-                # Handle piece movement controls.
-                if key.code == term.KEY_LEFT: game.move(-1)
-                elif key.code == term.KEY_RIGHT: game.move(1)
-                elif key.code == term.KEY_UP: game.rotate()
-                elif key.code == term.KEY_DOWN: game.soft_drop()
-                elif key == ' ': game.hard_drop()
-                elif key.lower() == 'c': game.hold()
-            # These controls work even when paused.
-            if key.lower() == 'p': game.paused = not game.paused
-            elif key.lower() == 'q': game.game_over = True
+        # Handle input
+        if not handle_input(term, game):
+            break
+
+        # Apply gravity and update game state
+        last_gravity_time = apply_gravity(game, last_gravity_time)
 
         if not game.paused:
-            current_time = time.time()
-            # Gravity gets faster as the level increases.
-            gravity_interval = max(0.05, 0.8 - (game.level - 1) * 0.05)
-            # If enough time has passed, move the piece down one step due to gravity.
-            if current_time - last_gravity_time > gravity_interval:
-                if not game._is_touching_ground():
-                    game.current_piece.y += 1
-                last_gravity_time = current_time
             # Run the main game logic update (handles locking).
             game.update()
 
-        # Redraw the entire screen.
-        draw_game_state(term, game)
-        # It's crucial to flush stdout to ensure the terminal draws updates immediately.
-        print(end='', flush=True)
+        # Throttle rendering for better performance
+        current_time = time.time()
+        if (current_time - last_render_time) * 1000 >= RENDER_THROTTLE_MS:
+            draw_game_state(term, game)
+            # It's crucial to flush stdout to ensure the terminal draws updates immediately.
+            print(end='', flush=True)
+            last_render_time = current_time
 
 
 def handle_game_over(term, game):
@@ -679,19 +759,23 @@ def main():
     # `cbreak`: keys are read immediately without needing Enter.
     # `hidden_cursor`: hides the blinking cursor.
     with term.fullscreen(), term.cbreak(), term.hidden_cursor():
-        # The main application loop.
-        while True:
-            start_level = show_main_menu(term)
-            if start_level is None: # User chose to quit from the menu
-                break
+        try:
+            # The main application loop.
+            while True:
+                start_level = show_main_menu(term)
+                if start_level is None: # User chose to quit from the menu
+                    break
 
-            game = Game(start_level=start_level)
-            game_loop(term, game)
+                game = Game(start_level=start_level)
+                game_loop(term, game)
 
-            # After the game loop ends, handle the game over screen.
-            # If handle_game_over returns False, the user wants to quit.
-            if not handle_game_over(term, game):
-                break
+                # After the game loop ends, handle the game over screen.
+                # If handle_game_over returns False, the user wants to quit.
+                if not handle_game_over(term, game):
+                    break
+        except KeyboardInterrupt:
+            # Handle Ctrl+C gracefully
+            pass
 
 # This is the standard entry point for a Python script.
 # The code inside this block will only run when the script is executed directly.
