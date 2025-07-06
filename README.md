@@ -1,6 +1,6 @@
 # Terminal Tetris
 
-This is a terminal-based Tetris game written in Python. It aims to be a feature-rich implementation of the classic game with modern mechanics. This project was created for personal use, with a future goal of porting it to Rust.
+This is a terminal-based Tetris game written in Python. It aims to be a feature-rich implementation of the classic game with modern mechanics. This project was created for personal use.
 
 -----
 
