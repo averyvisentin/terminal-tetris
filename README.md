@@ -29,10 +29,13 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
     ```bash
     cd terminal-tetris
     ```
-3.  Install the required `blessed` library:
+3.  Install the required `blessed` library: #I'm using the arch package python-blessed.
     ```bash
     pip install -r requirements.txt
     ```
+https://github.com/jquast/blessed
+https://pypi.org/project/blessed/
+
 
 ### Running the Game
 
