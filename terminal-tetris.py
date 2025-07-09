@@ -240,8 +240,9 @@ class Game:
 
     def _refill_bag(self):
         """Fills the bag with one of each of the 7 pieces and shuffles it."""
-        self.bag = list(SHAPES.keys())
-        random.shuffle(self.bag)
+        if not self.bag:  # Check if the bag is empty
+            self.bag = list(SHAPES.keys())
+            random.shuffle(self.bag)
 
     def _new_piece(self):
         """Gets a new piece from the bag, refilling the bag if it's empty."""
