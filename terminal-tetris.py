@@ -30,7 +30,7 @@ from blessed import Terminal  # A library to make terminal output colorful, styl
 
 # Game board dimensions in terms of blocks
 BOARD_WIDTH = 10
-BOARD_HEIGHT = 30
+BOARD_HEIGHT = 40
 
 # The (x, y) coordinates for the top-left corner of the playable area in the terminal.
 # This allows us to position the game board anywhere on the screen.
@@ -39,14 +39,14 @@ PLAYFIELD_Y_OFFSET = 2
 
 # High score configuration
 HIGHSCORE_FILE = 'highscores.txt'  # The name of the file where scores are saved
-MAX_SCORES = 5  # The maximum number of high scores to keep track of
+MAX_SCORES = 10  # The maximum number of high scores to keep track of
 
 # Game timing and input configuration
-INITIAL_GRAVITY_INTERVAL = 0.8  # Starting gravity speed in seconds
-GRAVITY_LEVEL_MULTIPLIER = 0.05  # How much faster gravity gets per level
-MIN_GRAVITY_INTERVAL = 0.05  # Minimum gravity interval (maximum speed)
+INITIAL_GRAVITY_INTERVAL = 1# Starting gravity speed in seconds
+GRAVITY_LEVEL_MULTIPLIER = 0.09  # How much faster gravity gets per level
+MIN_GRAVITY_INTERVAL = 0.1  # Minimum gravity interval (maximum speed)
 INPUT_TIMEOUT = 0.01  # Timeout for input polling in seconds
-RENDER_THROTTLE_MS = 16  # Minimum milliseconds between renders (~60 FPS)
+RENDER_THROTTLE_MS = 8  # Minimum milliseconds between renders (~60 FPS)
 
 # Level and name configuration
 MIN_LEVEL = 1
