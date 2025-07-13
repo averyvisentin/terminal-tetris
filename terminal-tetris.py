@@ -407,7 +407,7 @@ def draw_game_state(term, game):
         game.flash_text = ""
 
     # Draw ghost piece only if the setting is enabled
-    if SETTINGS.get('GHOST_PIECE_ENABLED', 1):
+    if SETTINGS.get('GHOST_PIECE_ENABLED') == 1:
         ghost_y = game.get_ghost_piece_y()
         if ghost_y > game.current_piece.y:
             ghost_piece = copy.deepcopy(game.current_piece)
@@ -436,8 +436,8 @@ def handle_input(term: Terminal, game: Game):
         elif key == SETTINGS["Key: Soft Drop"]: game.soft_drop()
         elif key == SETTINGS["Key: Hard Drop"]: game.hard_drop()
         elif key == SETTINGS["Key: Hold"]: game.hold()
-    if key.lower() == 'p': game.paused = not game.paused
-    elif key.lower() == 'q': game.game_over = True
+    if key == 'p': game.paused = not game.paused
+    elif key == 'q': game.game_over = True
 
 def apply_gravity(game: Game, last_gravity_time: float) -> float:
     if game.paused or game.game_over: return last_gravity_time
@@ -536,10 +536,10 @@ def show_main_menu(term):
             All Rights Reserved."""))
         key = term.inkey()
         if key == ' ': return selected_level
-        elif key.lower() == 'q': return None
+        elif key == 'q': return None
         elif key.code == term.KEY_LEFT: selected_level = max(SETTINGS['MIN_LEVEL'], selected_level - 1)
         elif key.code == term.KEY_RIGHT: selected_level = min(SETTINGS['MAX_LEVEL'], selected_level + 1)
-        elif key.lower() == 's': show_settings(term)
+        elif key == 's': show_settings(term)
 
 def show_score_editor(term: Terminal, scores_dict: dict) -> Optional[dict]:
     """Displays a sub-menu to edit dictionary values like SCORE_VALUES."""
@@ -579,78 +579,147 @@ def show_score_editor(term: Terminal, scores_dict: dict) -> Optional[dict]:
                 temp_scores[option_name] = max(0, current_value + (increment * 10))
             elif isinstance(current_value, float):
                 temp_scores[option_name] = round(max(0.0, current_value + (increment * 0.1)), 2)
-        elif key.lower() == 's' or key_event.code == term.KEY_ENTER:
+        elif key == 's' or key_event.code == term.KEY_ENTER:
             return temp_scores # Return the edited dictionary
-        elif key.lower() == 'q':
+        elif key == 'q':
             return None # Return None to indicate cancellation
 
 def show_settings(term):
+    """
+    Displays the settings menu, optimized to reduce flickering by only
+    redrawing parts of the screen that have changed.
+    """
     temp_settings = copy.deepcopy(SETTINGS)
     setting_options = list(temp_settings.keys())
     selected_index = 0
-    while True:
-        print(term.home + term.clear)
-        print(term.move_y(2) + term.center(term.bold("--- Game Settings ---")))
+
+    def redraw_all(selected_idx):
+        """Clears and redraws the entire settings screen."""
+        print(term.home + term.clear, end="")
+        print(term.move_y(2) + term.center(term.bold("--- Game Settings ---")), end="")
+
         for i, option in enumerate(setting_options):
-            value = temp_settings[option]
-            display_value = ""
-            if option == "GHOST_PIECE_ENABLED":
-                display_value = "Enabled" if value == 1 else "Disabled"
-            elif isinstance(value, dict):
-                display_value = "[Press Enter to Edit]"
-            elif isinstance(value, float):
-                display_value = f"{value:.2f}"
-            else:
-                display_value = get_key_display_name(value)
-            line = f"{option:.<35} {display_value}"
-            if i == selected_index: print(term.move_y(5 + i) + term.center(term.reverse(line)))
-            else: print(term.move_y(5 + i) + term.center(line))
+            draw_line(i, is_selected=(i == selected_idx))
 
-        # Updated instructions
-        print(term.move_y(term.height - 5) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."))
-        print(term.move_y(term.height - 4) + term.center("Press ENTER to change a keybinding or edit values."))
-        print(term.move_y(term.height - 3) + term.center("Press 's' to Save & Exit, or 'q' to Discard & Exit."))
-        print(term.move_y(term.height - 2) + term.center("Press 'd' to Restore Defaults."))
+        # Instructions
+        print(term.move_y(term.height - 5) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."), end="")
+        print(term.move_y(term.height - 4) + term.center("Press ENTER to change a keybinding or edit values."), end="")
+        print(term.move_y(term.height - 3) + term.center("Press 's' to Save & Exit, or 'q' to Discard & Exit."), end="")
+        print(term.move_y(term.height - 2) + term.center("Press 'd' to Restore Defaults."), end="")
+        sys.stdout.flush()
 
+    def draw_line(index, is_selected):
+        """Draws a single line of the settings menu."""
+        option_name = setting_options[index]
+        value = temp_settings[option_name]
+
+        # Determine the display value string
+        display_value = ""
+        if option_name == "GHOST_PIECE_ENABLED":
+            display_value = "Enabled" if value == 1 else "Disabled"
+        elif isinstance(value, dict):
+            display_value = "[Press Enter to Edit]"
+        elif isinstance(value, float):
+            display_value = f"{value:.2f}"
+        else:
+            display_value = get_key_display_name(str(value))
+
+        line = f"{option_name:.<35} {display_value}"
+
+        with term.location(y=5 + index):
+            # Center the line. Add padding to clear previous, longer text.
+            print(term.center(line.ljust(50)))
+
+        with term.location(y=5 + index):
+             if is_selected:
+                print(term.center(term.reverse(line)))
+             else:
+                print(term.center(line))
+
+    redraw_all(selected_index)
+    previous_index = selected_index
+
+    while True:
+        # Update visuals only if selection changed
+        if selected_index != previous_index:
+            draw_line(previous_index, is_selected=False) # De-highlight old
+            draw_line(selected_index, is_selected=True)  # Highlight new
+            sys.stdout.flush()
+
+        previous_index = selected_index
+
+        # Wait for input
         key_event = term.inkey()
         key = get_key_repr(key_event)
 
-        # BUGFIX: This logic needed to be before the main input checks
-        if key.lower() == 'd':
-            prompt = "Reset all settings to default? (y/n)"
-            print(term.move_y(term.height - 7) + term.center(term.black_on_red(prompt)))
-            confirm_key = term.inkey()
-            if confirm_key.lower() == 'y':
-                temp_settings = get_default_settings()
-            continue # Redraw the screen with new values
-
+        # Handle input and update state
         option_name = setting_options[selected_index]
-        current_value = temp_settings[option_name]
+        current_value = temp_settings.get(option_name)
 
-        if key == "KEY_UP": selected_index = (selected_index - 1) % len(setting_options)
-        elif key == "KEY_DOWN": selected_index = (selected_index + 1) % len(setting_options)
+        if key == "KEY_UP":
+            selected_index = (selected_index - 1) % len(setting_options)
+        elif key == "KEY_DOWN":
+            selected_index = (selected_index + 1) % len(setting_options)
+
         elif key in ["KEY_LEFT", "KEY_RIGHT"]:
-            increment = 1 if key == "KEY_RIGHT" else -1
-            if isinstance(current_value, int):
-                temp_settings[option_name] = current_value + increment
-            elif option_name == "GHOST_PIECE_ENABLED":
-                temp_settings[option_name] = 1 - current_value # Toggles 1 to 0 and 0 to 1
-            elif isinstance(current_value, float):
-                temp_settings[option_name] = round(current_value + (increment * 0.05), 2)
+            if option_name == "GHOST_PIECE_ENABLED":
+                temp_settings[option_name] = 1 - current_value #says its a bug but won't work without it
+
+            else:
+                increment = 1 if key == "KEY_RIGHT" else -1
+                if isinstance(current_value, int):
+                    temp_settings[option_name] += increment
+                elif isinstance(current_value, float):
+                    temp_settings[option_name] = round(current_value + (increment * 0.05), 2)
+            draw_line(selected_index, is_selected=True) # Redraw the updated line
+            sys.stdout.flush()
+
         elif key_event.code == term.KEY_ENTER:
             if "Key:" in option_name:
+                prompt_y = term.height - 7
                 prompt = f"Press new key for {option_name}..."
-                print(term.move_y(term.height - 7) + term.center(term.black_on_yellow(prompt)))
+                with term.location(y=prompt_y):
+                    print(term.center(term.black_on_yellow(prompt.ljust(len(prompt)+2))))
+
                 temp_settings[option_name] = get_key_repr(term.inkey())
+
+                with term.location(y=prompt_y):
+                    print(term.center(" " * (len(prompt) + 2))) # Clear prompt
+                draw_line(selected_index, is_selected=True)
+                sys.stdout.flush()
+
             elif isinstance(current_value, dict):
                 updated_dict = show_score_editor(term, current_value)
                 if updated_dict is not None:
                     temp_settings[option_name] = updated_dict
+                # A full redraw is necessary after returning from a sub-menu
+                redraw_all(selected_index)
+
+        elif key.lower() == 'd':
+            prompt_y = term.height - 7
+            prompt = "Reset all settings to default? (y/n)"
+            with term.location(y=prompt_y):
+                print(term.center(term.black_on_red(prompt.ljust(len(prompt)+2))))
+
+            confirm_key = term.inkey()
+            with term.location(y=prompt_y):
+                print(term.center(" " * (len(prompt) + 2))) # Clear prompt
+
+            if confirm_key.lower() == 'y':
+                temp_settings = get_default_settings()
+                redraw_all(selected_index)
+            else: # Redraw the line the prompt was covering
+                draw_line(selected_index, is_selected=True)
+                sys.stdout.flush()
+
         elif key.lower() == 's':
             save_settings(temp_settings)
             load_settings()
             return
-        elif key.lower() == 'q': return
+
+        elif key.lower() == 'q':
+            return
+
 
 def main():
     """Main function to set up the terminal and run the application."""
@@ -662,6 +731,10 @@ def main():
             while True:
                 start_level = show_main_menu(term)
                 if start_level is None: break
+                print(term.home + term.clear) # Clear screen once before a new game
+                draw_board_border(term)
+                draw_ui(term, Game(start_level=start_level)) # Draw the static UI elements
+                sys.stdout.flush()
                 game = Game(start_level=start_level)
                 game_loop(term, game)
                 if not handle_game_over(term, game): break
