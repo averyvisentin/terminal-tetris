@@ -486,9 +486,9 @@ def handle_game_over(term, game):
         print(term.move_y(term.height // 2 - 8) + term.center(term.bold("GAME OVER")))
         print(term.center(f"Final Score: {game.score}"))
         _display_high_scores_list(term, term.height // 2 - 4)
-        print(term.move_y(term.height - 3) + term.center("Press 'r' to Restart or 'q' to Quit"))
+        print(term.move_y(term.height - 3) + term.center("Press 'SPACE' for Main Menu or 'q' to Quit"))
         key = term.inkey()
-        if key.lower() == 'r': return True
+        if key.lower() == ' ': return True
         elif key.lower() == 'q': return False
 
 def get_default_settings() -> dict:
@@ -586,16 +586,15 @@ def show_score_editor(term: Terminal, scores_dict: dict) -> Optional[dict]:
 
 def show_settings(term):
     temp_settings = copy.deepcopy(SETTINGS)
-    setting_options = sorted(list(temp_settings.keys())) # Sort keys for consistent order
+    setting_options = list(temp_settings.keys())
     selected_index = 0
-
     while True:
         print(term.home + term.clear)
         print(term.move_y(2) + term.center(term.bold("--- Game Settings ---")))
-        for i, option_name in enumerate(setting_options):
-            value = temp_settings[option_name]
+        for i, option in enumerate(setting_options):
+            value = temp_settings[option]
             display_value = ""
-            if option_name == "GHOST_PIECE_ENABLED":
+            if option == "GHOST_PIECE_ENABLED":
                 display_value = "Enabled" if value == 1 else "Disabled"
             elif isinstance(value, dict):
                 display_value = "[Press Enter to Edit]"
@@ -603,13 +602,11 @@ def show_settings(term):
                 display_value = f"{value:.2f}"
             else:
                 display_value = get_key_display_name(value)
-            line = f"{option_name:.<35} {display_value}"
-            if i == selected_index:
-                print(term.move_y(5 + i) + term.center(term.reverse(line)))
-            else:
-                print(term.move_y(5 + i) + term.center(line))
+            line = f"{option:.<35} {display_value}"
+            if i == selected_index: print(term.move_y(5 + i) + term.center(term.reverse(line)))
+            else: print(term.move_y(5 + i) + term.center(line))
 
-        # Instructions
+        # Updated instructions
         print(term.move_y(term.height - 5) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."))
         print(term.move_y(term.height - 4) + term.center("Press ENTER to change a keybinding or edit values."))
         print(term.move_y(term.height - 3) + term.center("Press 's' to Save & Exit, or 'q' to Discard & Exit."))
@@ -618,28 +615,26 @@ def show_settings(term):
         key_event = term.inkey()
         key = get_key_repr(key_event)
 
+        # BUGFIX: This logic needed to be before the main input checks
         if key.lower() == 'd':
             prompt = "Reset all settings to default? (y/n)"
             print(term.move_y(term.height - 7) + term.center(term.black_on_red(prompt)))
             confirm_key = term.inkey()
             if confirm_key.lower() == 'y':
                 temp_settings = get_default_settings()
-            continue
+            continue # Redraw the screen with new values
 
         option_name = setting_options[selected_index]
         current_value = temp_settings[option_name]
 
-        if key == "KEY_UP":
-            selected_index = (selected_index - 1) % len(setting_options)
-        elif key == "KEY_DOWN":
-            selected_index = (selected_index + 1) % len(setting_options)
-        # BUGFIX: This is now an elif chain to ensure only one block executes.
+        if key == "KEY_UP": selected_index = (selected_index - 1) % len(setting_options)
+        elif key == "KEY_DOWN": selected_index = (selected_index + 1) % len(setting_options)
         elif key in ["KEY_LEFT", "KEY_RIGHT"]:
             increment = 1 if key == "KEY_RIGHT" else -1
-            if option_name == "GHOST_PIECE_ENABLED":
-                temp_settings[option_name] = 1 - current_value # Toggles between 1 and 0
-            elif isinstance(current_value, int):
+            if isinstance(current_value, int):
                 temp_settings[option_name] = current_value + increment
+            elif option_name == "GHOST_PIECE_ENABLED":
+                temp_settings[option_name] = 1 - current_value # Toggles 1 to 0 and 0 to 1
             elif isinstance(current_value, float):
                 temp_settings[option_name] = round(current_value + (increment * 0.05), 2)
         elif key_event.code == term.KEY_ENTER:
@@ -655,8 +650,7 @@ def show_settings(term):
             save_settings(temp_settings)
             load_settings()
             return
-        elif key.lower() == 'q':
-            return
+        elif key.lower() == 'q': return
 
 def main():
     """Main function to set up the terminal and run the application."""
