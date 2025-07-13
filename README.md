@@ -10,7 +10,7 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
   * **Modern Mechanics**: Includes advanced mechanics like T-Spin detection and a back-to-back bonus system.
   * **Hold Functionality**: Swap out the current piece with a stored piece.
   * **Persistent Database**: All high scores and user settings are saved to a local tetris.db file, so your progress and customizations are always remembered.
-  * **Advanced Settings Menu**: Customize everything from keybindings to game physics and scoring values.
+  * **Settings Menu**: Customize everything from keybindings to game physics and scoring values.
   * **Ghost Piece**: A preview of where the current piece will land.
   * **High Score Tracking**: The top 5 scores are saved and displayed on the main menu.
   * **Level Progression**: The game's speed increases as you clear more lines.

@@ -20,13 +20,9 @@ from typing import List, Tuple, Optional, Any
 from blessed import Terminal
 
 # --- Game Configuration & Constants ---
-# Get the absolute path of the directory containing this script.
-script_dir = os.path.dirname(os.path.abspath(__file__))
-# Define the database file path to be in the same directory as the script.
-DATABASE_FILE = os.path.join(script_dir, 'tetris.db')
-
-# This global dictionary will be populated by load_settings() from the database.
-SETTINGS = {}
+script_dir = os.path.dirname(os.path.abspath(__file__)) # Get the absolute path of the directory containing this script.
+DATABASE_FILE = os.path.join(script_dir, 'tetris.db') # Define the database file path to be in the same directory as the script.
+SETTINGS = {} # This global dictionary will be populated by load_settings() from the database.
 
 # Tetromino shapes and their colors are fundamental and remain hardcoded.
 SHAPES = {
@@ -166,6 +162,11 @@ class Game:
         self.last_move_was_rotation: bool = False
         self.lock_delay_start_time: float = 0
 
+        # NEW: Attributes for flash animation
+        self.lines_to_flash = []
+        self.flash_text = ""
+        self.flash_start_time = 0
+
     def _add_to_upcoming(self):
         if not self.bag: self._refill_bag()
         self.upcoming_pieces.append(self.bag.pop())
@@ -216,19 +217,36 @@ class Game:
         return None
 
     def _clear_lines(self, t_spin_type=None):
+        """Clears completed lines, calculates score, and sets up flash animation."""
+        lines_to_clear_indices = [i for i, row in enumerate(self.board) if all(cell != 0 for cell in row)]
+
+        if not lines_to_clear_indices and not t_spin_type:
+            return 0
+
+        # Set up the flash animation
+        self.lines_to_flash = lines_to_clear_indices
+        self.flash_start_time = time.time()
         new_board = [row for row in self.board if any(cell == 0 for cell in row)]
-        lines_cleared_count = SETTINGS['BOARD_HEIGHT'] - len(new_board)
-        if lines_cleared_count == 0 and not t_spin_type: return 0
-        self.board = [[0] * SETTINGS['BOARD_WIDTH'] for _ in range(lines_cleared_count)] + new_board
+        lines_cleared_count = len(self.board) - len(new_board)
+
+        if lines_cleared_count > 0:
+            for _ in range(lines_cleared_count):
+                new_board.insert(0, [0 for _ in range(SETTINGS['BOARD_WIDTH'])])
+            self.board = new_board
+
         score_key_map = {1: "SINGLE", 2: "DOUBLE", 3: "TRIPLE", 4: "TETRIS"}
         t_spin_key_map = {1: "T_SPIN_SINGLE", 2: "T_SPIN_DOUBLE", 3: "T_SPIN_TRIPLE"}
         score_key = t_spin_key_map.get(lines_cleared_count, t_spin_type) if t_spin_type else score_key_map.get(lines_cleared_count)
+
         if score_key:
+            # Set the text to be displayed
+            self.flash_text = score_key.replace("_", " ")
             base_score = SETTINGS['SCORE_VALUES'].get(score_key, 0)
             is_difficult = "TETRIS" in score_key or "T_SPIN" in score_key
             if is_difficult and self.is_back_to_back:
                 base_score *= SETTINGS['SCORE_VALUES']["BACK_TO_BACK_MULTIPLIER"]
             self.score += int(base_score * self.level)
+
         self.lines_cleared += lines_cleared_count
         self.level = (self.lines_cleared // 10) + 1
         return lines_cleared_count
@@ -364,17 +382,41 @@ def draw_game_state(term, game):
     print(term.home + term.clear_eos, end='')
     draw_board_border(term)
     draw_ui(term, game)
+
+    # Draw all the locked blocks on the board
     for y, row in enumerate(game.board):
         for x, cell in enumerate(row):
             if cell != 0:
                 color = get_color(term, PIECE_COLORS[cell])
                 print(term.move_xy(x * 2 + SETTINGS['PLAYFIELD_X_OFFSET'], y + SETTINGS['PLAYFIELD_Y_OFFSET']) + color(BLOCK_CHAR))
-    ghost_y = game.get_ghost_piece_y()
-    if ghost_y > game.current_piece.y:
-        ghost_piece = copy.deepcopy(game.current_piece)
-        ghost_piece.y = ghost_y
-        draw_piece(term, ghost_piece, offset=(SETTINGS['PLAYFIELD_X_OFFSET'], SETTINGS['PLAYFIELD_Y_OFFSET']), is_ghost=True)
+
+    # --- NEW: Flash Animation Logic ---
+    FLASH_DURATION = 0.2
+    if game.lines_to_flash and (time.time() - game.flash_start_time < SETTINGS['FLASH_DURATION']):
+        # Draw the flashing lines
+        for y in game.lines_to_flash:
+            for x in range(SETTINGS['BOARD_WIDTH']):
+                print(term.move_xy(x * 2 + SETTINGS['PLAYFIELD_X_OFFSET'], y + SETTINGS['PLAYFIELD_Y_OFFSET']) + term.white_on_white(BLOCK_CHAR))
+
+        # Display the clear text
+        if game.flash_text:
+            print(term.move_xy(2, 17) + term.cyan_bold(game.flash_text))
+    else:
+        # Reset flash state after duration
+        game.lines_to_flash = []
+        game.flash_text = ""
+
+    # Draw ghost piece only if the setting is enabled
+    if SETTINGS.get('GHOST_PIECE_ENABLED', 1):
+        ghost_y = game.get_ghost_piece_y()
+        if ghost_y > game.current_piece.y:
+            ghost_piece = copy.deepcopy(game.current_piece)
+            ghost_piece.y = ghost_y
+            draw_piece(term, ghost_piece, offset=(SETTINGS['PLAYFIELD_X_OFFSET'], SETTINGS['PLAYFIELD_Y_OFFSET']), is_ghost=True)
+
+    # Draw the current, active piece
     draw_piece(term, game.current_piece, offset=(SETTINGS['PLAYFIELD_X_OFFSET'], SETTINGS['PLAYFIELD_Y_OFFSET']))
+
     if game.paused:
         msg = "PAUSED"
         print(term.move_xy(SETTINGS['PLAYFIELD_X_OFFSET'] + SETTINGS['BOARD_WIDTH'] - len(msg)//2, SETTINGS['PLAYFIELD_Y_OFFSET'] + SETTINGS['BOARD_HEIGHT']//2) + term.black_on_white(msg))
@@ -459,8 +501,9 @@ def get_default_settings() -> dict:
         # Timing
         "INITIAL_GRAVITY_INTERVAL": 1.0, "GRAVITY_LEVEL_MULTIPLIER": 0.09, "MIN_GRAVITY_INTERVAL": 0.1,
         "INPUT_TIMEOUT": 0.01, "RENDER_THROTTLE_MS": 16, "Lock Delay (s)": 0.5,
+        "FLASH_DURATION": 0.2,
         # Gameplay
-        "MIN_LEVEL": 1, "MAX_LEVEL": 15,
+        "MIN_LEVEL": 1, "MAX_LEVEL": 15, "GHOST_PIECE_ENABLED": 1,
         # Scoring
         "SCORE_VALUES": {"SINGLE": 100, "DOUBLE": 300, "TRIPLE": 500, "TETRIS": 800, "T_SPIN_MINI": 100, "T_SPIN": 400, "T_SPIN_SINGLE": 800, "T_SPIN_DOUBLE": 1200, "T_SPIN_TRIPLE": 1600, "BACK_TO_BACK_MULTIPLIER": 1.5},
         # Keybindings
@@ -543,25 +586,30 @@ def show_score_editor(term: Terminal, scores_dict: dict) -> Optional[dict]:
 
 def show_settings(term):
     temp_settings = copy.deepcopy(SETTINGS)
-    setting_options = list(temp_settings.keys())
+    setting_options = sorted(list(temp_settings.keys())) # Sort keys for consistent order
     selected_index = 0
+
     while True:
         print(term.home + term.clear)
         print(term.move_y(2) + term.center(term.bold("--- Game Settings ---")))
-        for i, option in enumerate(setting_options):
-            value = temp_settings[option]
+        for i, option_name in enumerate(setting_options):
+            value = temp_settings[option_name]
             display_value = ""
-            if isinstance(value, dict):
+            if option_name == "GHOST_PIECE_ENABLED":
+                display_value = "Enabled" if value == 1 else "Disabled"
+            elif isinstance(value, dict):
                 display_value = "[Press Enter to Edit]"
             elif isinstance(value, float):
                 display_value = f"{value:.2f}"
             else:
                 display_value = get_key_display_name(value)
-            line = f"{option:.<35} {display_value}"
-            if i == selected_index: print(term.move_y(5 + i) + term.center(term.reverse(line)))
-            else: print(term.move_y(5 + i) + term.center(line))
+            line = f"{option_name:.<35} {display_value}"
+            if i == selected_index:
+                print(term.move_y(5 + i) + term.center(term.reverse(line)))
+            else:
+                print(term.move_y(5 + i) + term.center(line))
 
-        # Updated instructions
+        # Instructions
         print(term.move_y(term.height - 5) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."))
         print(term.move_y(term.height - 4) + term.center("Press ENTER to change a keybinding or edit values."))
         print(term.move_y(term.height - 3) + term.center("Press 's' to Save & Exit, or 'q' to Discard & Exit."))
@@ -570,23 +618,27 @@ def show_settings(term):
         key_event = term.inkey()
         key = get_key_repr(key_event)
 
-        # BUGFIX: This logic needed to be before the main input checks
         if key.lower() == 'd':
             prompt = "Reset all settings to default? (y/n)"
             print(term.move_y(term.height - 7) + term.center(term.black_on_red(prompt)))
             confirm_key = term.inkey()
             if confirm_key.lower() == 'y':
                 temp_settings = get_default_settings()
-            continue # Redraw the screen with new values
+            continue
 
         option_name = setting_options[selected_index]
         current_value = temp_settings[option_name]
 
-        if key == "KEY_UP": selected_index = (selected_index - 1) % len(setting_options)
-        elif key == "KEY_DOWN": selected_index = (selected_index + 1) % len(setting_options)
+        if key == "KEY_UP":
+            selected_index = (selected_index - 1) % len(setting_options)
+        elif key == "KEY_DOWN":
+            selected_index = (selected_index + 1) % len(setting_options)
+        # BUGFIX: This is now an elif chain to ensure only one block executes.
         elif key in ["KEY_LEFT", "KEY_RIGHT"]:
             increment = 1 if key == "KEY_RIGHT" else -1
-            if isinstance(current_value, int):
+            if option_name == "GHOST_PIECE_ENABLED":
+                temp_settings[option_name] = 1 - current_value # Toggles between 1 and 0
+            elif isinstance(current_value, int):
                 temp_settings[option_name] = current_value + increment
             elif isinstance(current_value, float):
                 temp_settings[option_name] = round(current_value + (increment * 0.05), 2)
@@ -603,7 +655,8 @@ def show_settings(term):
             save_settings(temp_settings)
             load_settings()
             return
-        elif key.lower() == 'q': return
+        elif key.lower() == 'q':
+            return
 
 def main():
     """Main function to set up the terminal and run the application."""
