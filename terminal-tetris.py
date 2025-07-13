@@ -19,6 +19,8 @@ Author: avery
 
 # Import necessary libraries
 import time  # For handling time-based events like gravity and lock delays
+import sys
+import collections
 import random  # For shuffling the bag of tetrominoes
 import os  # For handling file operations, specifically for the high score file
 from typing import List, Tuple, Optional, Any
@@ -213,7 +215,7 @@ class Piece:
 class Game:
     """Manages the entire state and logic of the Tetris game."""
 
-    def __init__(self, start_level: int = 1):
+    def __init__(self, start_level: int = 1, base_score: int = 1000, difficulty: float = 1.0):
         """Initializes the game board, score, level, and pieces."""
         # The board is a 2D list (grid). 0 means empty, a shape name (e.g., 'T') means a locked block.
         self.board: List[List[Any]] = [[0 for _ in range(BOARD_WIDTH)] for _ in range(BOARD_HEIGHT)]
@@ -222,6 +224,8 @@ class Game:
         self.level: int = start_level
         self.game_over: bool = False
         self.paused: bool = False
+        self.base_score: int = base_score
+        self.difficulty: float = difficulty
 
         # The "bag" system ensures all 7 pieces appear once before any piece repeats.
         self.bag: List[str] = []
@@ -237,6 +241,17 @@ class Game:
         self.is_back_to_back: bool = False  # True if the last clear was a Tetris or T-Spin
         self.last_move_was_rotation: bool = False # Used to check for T-Spins
         self.lock_delay_start_time: float = 0  # Timestamp for when the lock delay started
+
+    def _increase_level(self):
+        if self.score >= self.base_score * self.level:
+            self.level += 1
+            self.base_score *= self.level
+            # Update difficulty if needed
+            if self.difficulty < 2.0:
+                self.difficulty = min(self.difficulty + 0.5, 2.0)
+            # Clear lines if level increases
+            self._clear_lines()
+
 
     def _refill_bag(self):
         """Fills the bag with one of each of the 7 pieces and shuffles it."""
@@ -472,6 +487,7 @@ class Game:
             self.lock_delay_start_time = 0
 
     def update(self):
+        self._increase_level()
         """The main game logic update tick, called repeatedly in the game loop."""
         if self.paused or self.game_over: return
 
@@ -507,6 +523,7 @@ def get_color(term, color_name):
 def draw_board_border(term):
     """Draws a box character border around the playfield."""
     x, y = PLAYFIELD_X_OFFSET - 2, PLAYFIELD_Y_OFFSET - 1
+
     # Top border
     print(term.move_xy(x, y) + '╔' + '═' * (BOARD_WIDTH * 2 + 2) + '╗')
     # Side borders
@@ -753,17 +770,27 @@ def show_main_menu(term):
             selected_level = min(15, selected_level + 1)
 
 def main():
+    Position = collections.namedtuple('Position', ('row', 'column'))
     """The main function that sets up the terminal and runs the application."""
-    term = Terminal()
+    term = Terminal(stream=sys.stderr)
     # `blessed` context manager handles setting up and tearing down the special terminal modes.
     # `fullscreen`: uses the whole terminal window.
     # `cbreak`: keys are read immediately without needing Enter.
     # `hidden_cursor`: hides the blinking cursor.
-    with term.fullscreen(), term.cbreak(), term.hidden_cursor():
+    with term.fullscreen(), term.cbreak(), term.hidden_cursor(), term.location(999,999):
+        pos = Position(*term.get_location(timeout=5.0))
         try:
             # The main application loop.
             while True:
                 start_level = show_main_menu(term)
+                if -1 not in pos:
+                    # true size was determined
+                    lines, columns = pos.row, pos.column
+
+                elif pos.row == -1:
+                    # terminal size was not determined
+                    lines, columns = term.height, term.width
+
                 if start_level is None: # User chose to quit from the menu
                     break
 
