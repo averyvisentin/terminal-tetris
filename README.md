@@ -1,7 +1,7 @@
 # Terminal Tetris
 
 This is a terminal-based Tetris game written in Python. It aims to be a feature-rich implementation of the classic game with modern mechanics. This project was created for personal use.
-
+![sceenshot](./screenshots/game.png) ![sceenshot](./screenshots/settings.png)
 -----
 
 ## Features
@@ -16,7 +16,7 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
   * **Level Progression**: The game's speed increases as you clear more lines.
   * **Proper Lock Delay**: A half-second delay after a piece touches a surface, allowing for last-second adjustments.
   * **Bag Randomization**: A 7-bag randomization system ensures that all seven tetrominoes will appear in a random order before any are repeated.
-
+![sceenshot](./screenshots/main-menu.png)
 -----
 
 ## How to Play
@@ -36,6 +36,7 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
     pip install -r requirements.txt
     ```
 https://github.com/jquast/blessed
+
 https://pypi.org/project/blessed/
 
 
@@ -50,7 +51,7 @@ python terminal-tetris.py
 A shell script is also provided for convenience:
 
 ```bash
-./pykitty.sh
+./launch.sh
 ```
 
 -----
@@ -66,7 +67,7 @@ A shell script is also provided for convenience:
 | `c`         | Hold          |
 | `p`         | Pause         |
 | `q`         | Quit          |
-
+![sceenshot](./screenshots/game-paused.png)
 -----
 
 ## Scoring
@@ -85,9 +86,12 @@ The scoring system is based on modern Tetris guidelines, with the base score mul
 | T-Spin Double       | 1200      |
 | T-Spin Triple       | 1600      |
 | Back-to-Back Bonus  | 1.5x      |
-
+![sceenshot](./screenshots/new-score.png)
 -----
 
 ## High Scores
 
-The game keeps track of the top 5 high scores in a `highscores.txt` file. If you achieve a high score, you will be prompted to enter a three-character name.
+The game keeps track of the top 5 high scores in a `tetris.db` file. If you achieve a high score, you will be prompted to enter a three-character name.
+
+
+![sceenshot](./screenshots/game-over.png)
