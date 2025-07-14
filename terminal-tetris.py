@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """
 Terminal Tetris Game
 A fully-featured Tetris implementation for the terminal with modern mechanics.
@@ -18,7 +17,7 @@ import random
 import os
 import sqlite3
 import json # Added for handling complex settings
-from typing import List, Tuple, Optional, Any
+from typing import List, Tuple, Optional, Any, Callable
 from blessed import Terminal
 
 # --- Game Configuration & Constants ---
@@ -36,9 +35,10 @@ SHAPES = {
     'J': [['.....', '.O...', '.OOO.', '.....', '.....'], ['.....', '..OO.', '..O..', '..O..', '.....'], ['.....', '.....', '.OOO.', '...O.', '.....'], ['.....', '..O..', '..O..', '.OO..', '.....']],
     'L': [['.....', '...O.', '.OOO.', '.....', '.....'], ['.....', '..O..', '..O..', '..OO.', '.....'], ['.....', '.....', '.OOO.', '.O...', '.....'], ['.....', '.OO..', '..O..', '..O..', '.....']]
 }
-PIECE_COLORS = {'I': 'cyan', 'O': 'yellow', 'T': 'magenta', 'S': 'green', 'Z': 'red', 'J': 'blue', 'L': 'orange'}
+PIECE_COLORS = {'I': 'cyan', 'O': 'yellow', 'T': 'magenta', 'S': 'green', 'Z': 'red', 'J': 'blue', 'L': 'orange', 'G': 'white'}
 BLOCK_CHAR = '██'
 GHOST_CHAR = '▒▒'
+GARBAGE_BLOCK_TYPE = 'G'
 
 # --- Database & Settings Management ---
 
@@ -47,22 +47,24 @@ def initialize_database():
     with sqlite3.connect(DATABASE_FILE) as conn:
         cursor = conn.cursor()
         cursor.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
-        cursor.execute('CREATE TABLE IF NOT EXISTS highscores (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, score INTEGER NOT NULL)')
-        cursor.execute('CREATE TABLE IF NOT EXISTS saved_game (id INTEGER PRIMARY KEY, game_state TEXT NOT NULL)') #INIT SAVED GAME TABLE
+        cursor.execute('CREATE TABLE IF NOT EXISTS highscores (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, score INTEGER NOT NULL, time REAL NOT NULL, lines INTEGER NOT NULL)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS sprint_highscores (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, time REAL NOT NULL)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS timed_highscores (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, score INTEGER NOT NULL, lines INTEGER NOT NULL)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS garbage_highscores (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, time REAL NOT NULL)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS saved_game (id INTEGER PRIMARY KEY, game_state TEXT NOT NULL)')
 
 def save_settings(settings_dict):
     """Saves the entire settings dictionary to the database."""
     with sqlite3.connect(DATABASE_FILE) as conn:
         cursor = conn.cursor()
         for key, value in settings_dict.items():
-            # Serialize dicts to JSON strings before saving
             value_to_save = json.dumps(value) if isinstance(value, dict) else str(value)
             cursor.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value_to_save))
 
 def load_settings():
     """Loads all settings from the database, applying defaults on first run."""
     global SETTINGS
-    defaults = get_default_settings() # Use the new helper function
+    defaults = get_default_settings()
 
     with sqlite3.connect(DATABASE_FILE) as conn:
         cursor = conn.cursor()
@@ -93,32 +95,55 @@ def load_settings():
             loaded_settings[key] = default_value
     SETTINGS = loaded_settings
 
-def load_high_scores() -> List[Tuple[int, str]]:
+def format_time(seconds: float) -> str:
+    """Formats seconds into a MM:SS.ss string."""
+    minutes = int(seconds // 60)
+    remaining_seconds = seconds % 60
+    return f"{minutes:02}:{remaining_seconds:05.2f}"
+
+# --- High Score Functions ---
+
+def load_high_scores(table: str, select_cols: str, order_by_clause: str) -> List[Tuple]:
+    """Loads high scores from the specified table."""
     with sqlite3.connect(DATABASE_FILE) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT score, name FROM highscores ORDER BY score DESC LIMIT ?", (SETTINGS.get('MAX_SCORES', 10),))
+        query = f"SELECT {select_cols} FROM {table} ORDER BY {order_by_clause} LIMIT ?"
+        cursor.execute(query, (SETTINGS.get('MAX_SCORES', 10),))
         return cursor.fetchall()
 
-def save_high_scores(scores: List[Tuple[int, str]]) -> bool:
+def save_high_scores(scores: List[Tuple], table: str, db_cols: List[str], sort_key_func: Callable, sort_reverse: bool) -> bool:
+    """
+    Saves high scores to the specified table.
+    Assumes the tuples in 'scores' have values that correspond to the order of 'db_cols'.
+    """
     with sqlite3.connect(DATABASE_FILE) as conn:
         cursor = conn.cursor()
         try:
-            cursor.execute("DELETE FROM highscores")
-            scores.sort(key=lambda item: item[0], reverse=True)
-            for score, name in scores[:SETTINGS.get('MAX_SCORES', 10)]:
-                cursor.execute("INSERT INTO highscores (name, score) VALUES (?, ?)", (name, score))
+            cursor.execute(f"DELETE FROM {table}")
+            scores.sort(key=sort_key_func, reverse=sort_reverse)
+
+            cols_str = ", ".join(db_cols)
+            placeholders = ", ".join(["?"] * len(db_cols))
+            query = f"INSERT INTO {table} ({cols_str}) VALUES ({placeholders})"
+
+            for score_tuple in scores[:SETTINGS.get('MAX_SCORES', 10)]:
+                cursor.execute(query, score_tuple)
             return True
         except sqlite3.Error:
             return False
 
-def _display_high_scores_list(term: Terminal, start_y: int) -> int:
-    print(term.move_y(start_y) + term.center(term.underline("Top High Scores")))
-    scores_to_show = load_high_scores()
+def _display_high_scores_list(term: Terminal, start_y: int, title: str, scores_to_show: List[Tuple], formatter_func: Callable[[Tuple], str]) -> int:
+    """Displays a generic list of high scores."""
+    print(term.move_y(start_y) + term.center(term.underline(title)))
     if not scores_to_show:
         print(term.center("No scores yet!"))
         return 2
-    for i, (score, name) in enumerate(scores_to_show):
-        line = f"{i+1}. {name:<{SETTINGS.get('MAX_NAME_LENGTH', 3)}} - {score}"
+    for i, score_tuple in enumerate(scores_to_show):
+        # Assumes the last element of the tuple is the player's name.
+        name = score_tuple[-1]
+        score_values = score_tuple[:-1]
+        score_str = formatter_func(score_values)
+        line = f"{i+1}. {name:<{SETTINGS.get('MAX_NAME_LENGTH', 3)}} - {score_str}"
         print(term.center(line))
     return len(scores_to_show) + 2
 
@@ -146,11 +171,12 @@ class Piece:
         return positions
 
 class Game:
-    def __init__(self, start_level: int = 1):
+    def __init__(self, gamemode: str = "standard", start_level: int = 1):
         self.board: List[List[Any]] = [[0 for _ in range(SETTINGS['BOARD_WIDTH'])] for _ in range(SETTINGS['BOARD_HEIGHT'])]
         self.score: int = 0
         self.lines_cleared: int = 0
         self.level: int = start_level
+        self.start_level: int = start_level
         self.game_over: bool = False
         self.paused: bool = False
         self.bag: List[str] = []
@@ -165,11 +191,28 @@ class Game:
         self.last_move_was_rotation: bool = False
         self.lock_delay_start_time: float = 0
         self.quit_after_save: bool = False
-
-        # NEW: Attributes for flash animation
         self.lines_to_flash = []
         self.flash_text = ""
         self.flash_start_time = 0
+        self.gamemode: str = gamemode
+        self.start_time: float = time.time()
+        self.elapsed_time: float = 0
+        # NEW: Attribute for garbage mode timing
+        self.last_garbage_time: float = time.time()
+
+    def add_garbage_row(self):
+        """Adds a row of garbage to the bottom of the board."""
+        # Create a new garbage row with one hole
+        hole_position = random.randint(0, SETTINGS['BOARD_WIDTH'] - 1)
+        new_row = [GARBAGE_BLOCK_TYPE if i != hole_position else 0 for i in range(SETTINGS['BOARD_WIDTH'])]
+
+        # Remove the top row and add the garbage row to the bottom
+        self.board.pop(0)
+        self.board.append(new_row)
+
+        # Check if the current piece is now in an invalid position
+        if not self._is_valid_position(self.current_piece):
+            self.game_over = True
 
     def _add_to_upcoming(self):
         if not self.bag: self._refill_bag()
@@ -221,13 +264,10 @@ class Game:
         return None
 
     def _clear_lines(self, t_spin_type=None):
-        """Clears completed lines, calculates score, and sets up flash animation."""
         lines_to_clear_indices = [i for i, row in enumerate(self.board) if all(cell != 0 for cell in row)]
-
         if not lines_to_clear_indices and not t_spin_type:
             return 0
 
-        # Set up the flash animation
         self.lines_to_flash = lines_to_clear_indices
         self.flash_start_time = time.time()
         new_board = [row for row in self.board if any(cell == 0 for cell in row)]
@@ -238,21 +278,26 @@ class Game:
                 new_board.insert(0, [0 for _ in range(SETTINGS['BOARD_WIDTH'])])
             self.board = new_board
 
-        score_key_map = {1: "SINGLE", 2: "DOUBLE", 3: "TRIPLE", 4: "TETRIS"}
-        t_spin_key_map = {1: "T_SPIN_SINGLE", 2: "T_SPIN_DOUBLE", 3: "T_SPIN_TRIPLE"}
-        score_key = t_spin_key_map.get(lines_cleared_count, t_spin_type) if t_spin_type else score_key_map.get(lines_cleared_count)
+        if self.gamemode in ["standard", "timed", "garbage"]:
+            score_key_map = {1: "SINGLE", 2: "DOUBLE", 3: "TRIPLE", 4: "TETRIS"}
+            t_spin_key_map = {1: "T_SPIN_SINGLE", 2: "T_SPIN_DOUBLE", 3: "T_SPIN_TRIPLE"}
+            score_key = t_spin_key_map.get(lines_cleared_count, t_spin_type) if t_spin_type else score_key_map.get(lines_cleared_count)
 
-        if score_key:
-            # Set the text to be displayed
-            self.flash_text = score_key.replace("_", " ")
-            base_score = SETTINGS['SCORE_VALUES'].get(score_key, 0)
-            is_difficult = "TETRIS" in score_key or "T_SPIN" in score_key
-            if is_difficult and self.is_back_to_back:
-                base_score *= SETTINGS['SCORE_VALUES']["BACK_TO_BACK_MULTIPLIER"]
-            self.score += int(base_score * self.level)
+            if score_key:
+                self.flash_text = score_key.replace("_", " ")
+                base_score = SETTINGS['SCORE_VALUES'].get(score_key, 0)
+                is_difficult = "TETRIS" in score_key or "T_SPIN" in score_key
+                if is_difficult and self.is_back_to_back:
+                    base_score *= SETTINGS['SCORE_VALUES']["BACK_TO_BACK_MULTIPLIER"]
+                self.score += int(base_score * self.level)
 
         self.lines_cleared += lines_cleared_count
-        self.level = (self.lines_cleared // 10) + 1
+        self.level = self.start_level + (self.lines_cleared // 10)
+
+        if self.gamemode == "sprint" and self.lines_cleared >= 40:
+            self.elapsed_time = time.time() - self.start_time
+            self.game_over = True
+
         return lines_cleared_count
 
     def move(self, dx):
@@ -281,7 +326,7 @@ class Game:
     def soft_drop(self):
         if not self._is_touching_ground():
             self.current_piece.y += 1
-            self.score += 1
+            if self.gamemode in ['standard', 'timed', 'garbage']: self.score += 1
             self.last_move_was_rotation = False
         else: self.initiate_lock_delay()
 
@@ -290,7 +335,7 @@ class Game:
         while not self._is_touching_ground():
             self.current_piece.y += 1
             drop_distance += 1
-        self.score += drop_distance * 2
+        if self.gamemode in ['standard', 'timed', 'garbage']: self.score += drop_distance * 2
         self._lock_piece()
 
     def hold(self):
@@ -312,6 +357,20 @@ class Game:
 
     def update(self):
         if self.paused or self.game_over: return
+
+        current_time = time.time()
+        self.elapsed_time = current_time - self.start_time
+
+        if self.gamemode == 'timed':
+            if self.elapsed_time >= SETTINGS['TIMED_MODE_DURATION_S']:
+                self.game_over = True
+                return
+
+        if self.gamemode == 'garbage':
+            if current_time - self.last_garbage_time >= SETTINGS['GARBAGE_INTERVAL_S']:
+                self.add_garbage_row()
+                self.last_garbage_time = current_time
+
         if self._is_touching_ground():
             self.initiate_lock_delay()
             if self.lock_delay_start_time and (time.time() - self.lock_delay_start_time >= SETTINGS["Lock Delay (s)"]):
@@ -358,10 +417,25 @@ def draw_ui(term, game):
         print(term.move_xy(x, y + h -1) + f"╚{'═'*(w-2)}╝")
         if content: print(term.move_xy(x + 2, y + 2) + str(content))
 
-    draw_box(0, 2, 20, 4, "SCORE", f"{game.score}")
-    draw_box(0, 7, 20, 4, "LEVEL", f"{game.level}")
-    draw_box(0, 12, 20, 4, "LINES", f"{game.lines_cleared}")
-    if game.is_back_to_back: print(term.move_xy(2, 17) + term.yellow_bold("Back-to-Back!"))
+    if game.gamemode == "sprint":
+        draw_box(0, 2, 20, 4, "TIME", f"{format_time(game.elapsed_time)}")
+        lines_text = f"{min(game.lines_cleared, 40)}/40"
+        draw_box(0, 12, 20, 4, "LINES", lines_text)
+    elif game.gamemode == "timed":
+        time_left = max(0, SETTINGS['TIMED_MODE_DURATION_S'] - game.elapsed_time)
+        draw_box(0, 2, 20, 4, "TIME LEFT", f"{format_time(time_left)}")
+        draw_box(0, 7, 20, 4, "SCORE", f"{game.score}")
+        draw_box(0, 12, 20, 4, "LINES", f"{game.lines_cleared}")
+    elif game.gamemode == "garbage":
+        draw_box(0, 2, 20, 4, "TIME", f"{format_time(game.elapsed_time)}")
+        draw_box(0, 7, 20, 4, "SCORE", f"{game.score}")
+        draw_box(0, 12, 20, 4, "LINES", f"{game.lines_cleared}")
+    else: # Standard mode
+        draw_box(0, 2, 20, 4, "SCORE", f"{game.score}")
+        draw_box(0, 12, 20, 4, "LINES", f"{game.lines_cleared}")
+
+    if game.gamemode not in ['timed', 'garbage']:
+        draw_box(0, 7, 20, 4, "LEVEL", f"{game.level}")
 
     next_box_x = SETTINGS['PLAYFIELD_X_OFFSET'] + SETTINGS['BOARD_WIDTH'] * 2 + 5
     next_box_y = SETTINGS['PLAYFIELD_Y_OFFSET']
@@ -389,30 +463,22 @@ def draw_game_state(term, game):
     draw_board_border(term)
     draw_ui(term, game)
 
-    # Draw all the locked blocks on the board
     for y, row in enumerate(game.board):
         for x, cell in enumerate(row):
             if cell != 0:
-                color = get_color(term, PIECE_COLORS[cell])
+                color = get_color(term, PIECE_COLORS.get(cell, 'white'))
                 print(term.move_xy(x * 2 + SETTINGS['PLAYFIELD_X_OFFSET'], y + SETTINGS['PLAYFIELD_Y_OFFSET']) + color(BLOCK_CHAR))
 
-    # --- NEW: Flash Animation Logic ---
-    FLASH_DURATION = 0.2
     if game.lines_to_flash and (time.time() - game.flash_start_time < SETTINGS['FLASH_DURATION']):
-        # Draw the flashing lines
         for y in game.lines_to_flash:
             for x in range(SETTINGS['BOARD_WIDTH']):
                 print(term.move_xy(x * 2 + SETTINGS['PLAYFIELD_X_OFFSET'], y + SETTINGS['PLAYFIELD_Y_OFFSET']) + term.white_on_white(BLOCK_CHAR))
-
-        # Display the clear text
         if game.flash_text:
             print(term.move_xy(2, 17) + term.cyan_bold(game.flash_text))
     else:
-        # Reset flash state after duration
         game.lines_to_flash = []
         game.flash_text = ""
 
-    # Draw ghost piece only if the setting is enabled
     if SETTINGS.get('GHOST_PIECE_ENABLED') == 1:
         ghost_y = game.get_ghost_piece_y()
         if ghost_y > game.current_piece.y:
@@ -420,7 +486,6 @@ def draw_game_state(term, game):
             ghost_piece.y = ghost_y
             draw_piece(term, ghost_piece, offset=(SETTINGS['PLAYFIELD_X_OFFSET'], SETTINGS['PLAYFIELD_Y_OFFSET']), is_ghost=True)
 
-    # Draw the current, active piece
     draw_piece(term, game.current_piece, offset=(SETTINGS['PLAYFIELD_X_OFFSET'], SETTINGS['PLAYFIELD_Y_OFFSET']))
 
     if game.paused:
@@ -430,27 +495,14 @@ def draw_game_state(term, game):
 def save_game_state(game: 'Game'):
     """Serializes the game state and saves it to the database."""
     state = {
-        'board': game.board,
-        'score': game.score,
-        'lines_cleared': game.lines_cleared,
-        'level': game.level,
-        'current_piece': {
-            'shape_name': game.current_piece.shape_name,
-            'x': game.current_piece.x,
-            'y': game.current_piece.y,
-            'rotation': game.current_piece.rotation,
-        },
-        'hold_piece': {
-            'shape_name': game.hold_piece.shape_name,
-        } if game.hold_piece else None,
-        'can_hold': game.can_hold,
-        'upcoming_pieces': list(game.upcoming_pieces),
-        'bag': game.bag,
-        'is_back_to_back': game.is_back_to_back,
+        'board': game.board, 'score': game.score, 'lines_cleared': game.lines_cleared, 'level': game.level,
+        'gamemode': game.gamemode,
+        'current_piece': {'shape_name': game.current_piece.shape_name, 'x': game.current_piece.x, 'y': game.current_piece.y, 'rotation': game.current_piece.rotation,},
+        'hold_piece': {'shape_name': game.hold_piece.shape_name,} if game.hold_piece else None,
+        'can_hold': game.can_hold, 'upcoming_pieces': list(game.upcoming_pieces), 'bag': game.bag, 'is_back_to_back': game.is_back_to_back,
     }
     with sqlite3.connect(DATABASE_FILE) as conn:
         cursor = conn.cursor()
-        # Overwrite the single save state row (id=1)
         cursor.execute("INSERT OR REPLACE INTO saved_game (id, game_state) VALUES (1, ?)", (json.dumps(state),))
 
 def load_game_state() -> Optional['Game']:
@@ -459,34 +511,17 @@ def load_game_state() -> Optional['Game']:
         cursor = conn.cursor()
         cursor.execute("SELECT game_state FROM saved_game WHERE id = 1")
         row = cursor.fetchone()
-        if not row:
-            return None
+        if not row: return None
 
     state = json.loads(row[0])
-    # Create a new game instance at the correct level to ensure gravity is right
-    game = Game(start_level=state['level'])
-
-    # Reconstruct the game state from the loaded data
-    game.board = state['board']
-    game.score = state['score']
-    game.lines_cleared = state['lines_cleared']
-    game.level = state['level']
-    game.can_hold = state['can_hold']
-    game.upcoming_pieces = collections.deque(state['upcoming_pieces'])
-    game.bag = state['bag']
-    game.is_back_to_back = state['is_back_to_back']
-
-    # Reconstruct pieces
+    game = Game(gamemode=state.get('gamemode', 'standard'), start_level=state['level'])
+    game.board = state['board']; game.score = state['score']; game.lines_cleared = state['lines_cleared']; game.level = state['level']
+    game.can_hold = state['can_hold']; game.upcoming_pieces = collections.deque(state['upcoming_pieces']); game.bag = state['bag']; game.is_back_to_back = state['is_back_to_back']
     cp_state = state['current_piece']
-    game.current_piece = Piece(cp_state['shape_name'])
-    game.current_piece.x = cp_state['x']
-    game.current_piece.y = cp_state['y']
-    game.current_piece.rotation = cp_state['rotation']
-
+    game.current_piece = Piece(cp_state['shape_name']); game.current_piece.x = cp_state['x']; game.current_piece.y = cp_state['y']; game.current_piece.rotation = cp_state['rotation']
     if state['hold_piece']:
         hp_state = state['hold_piece']
         game.hold_piece = Piece(hp_state['shape_name'])
-
     return game
 
 def delete_save_state():
@@ -502,7 +537,6 @@ def has_save_state() -> bool:
         cursor.execute("SELECT id FROM saved_game WHERE id = 1")
         return cursor.fetchone() is not None
 
-
 def get_key_repr(key):
     if key.is_sequence: return key.name
     return str(key)
@@ -511,16 +545,15 @@ def handle_input(term: Terminal, game: Game):
     key_event = term.inkey(timeout=SETTINGS['INPUT_TIMEOUT'])
     if not key_event: return
     key = get_key_repr(key_event)
-    if game.paused and key.lower() == 's':
+    if game.paused and key.lower() == 's' and game.gamemode == 'standard':
         save_game_state(game)
-        # Display a temporary message (optional, but good for user feedback)
         msg = "GAME SAVED"
         print(term.move_xy(SETTINGS['PLAYFIELD_X_OFFSET'] + SETTINGS['BOARD_WIDTH'] - len(msg)//2, SETTINGS['PLAYFIELD_Y_OFFSET'] + SETTINGS['BOARD_HEIGHT']//2 + 2) + term.black_on_green(msg))
         sys.stdout.flush()
-        time.sleep(1) # Pause to show the message
+        time.sleep(1)
         game.quit_after_save = True
         game.game_over = True
-        return # Prevent other actions
+        return
     if not game.paused:
         if key == SETTINGS["Key: Left"]: game.move(-1)
         elif key == SETTINGS["Key: Right"]: game.move(1)
@@ -556,46 +589,150 @@ def game_loop(term: Terminal, game: Game):
             last_render_time = current_time
 
 def handle_game_over(term, game):
-    high_scores = load_high_scores()
-    is_high_score = len(high_scores) < SETTINGS['MAX_SCORES'] or game.score > high_scores[-1][0]
-    player_name = ""
-    if is_high_score and game.score > 0:
+    if game.gamemode == 'sprint':
+        high_scores = load_high_scores(table='sprint_highscores', select_cols='time, name', order_by_clause='time ASC')
+        is_high_score = (len(high_scores) < SETTINGS['MAX_SCORES'] or game.elapsed_time < high_scores[-1][0])
+        player_name = ""
+        if game.lines_cleared >= 40 and is_high_score:
+            while True:
+                print(term.home + term.clear)
+                print(term.center(term.bold("🎉 NEW SPRINT RECORD! 🎉")))
+                print(term.center(f"Your Time: {format_time(game.elapsed_time)}"))
+                print(term.center(f"Enter your name ({SETTINGS['MAX_NAME_LENGTH']} chars):"))
+                input_box = f" {player_name.ljust(SETTINGS['MAX_NAME_LENGTH'], '_')} "
+                print(term.center(term.reverse(input_box)))
+                key = term.inkey()
+                if key.code == term.KEY_ENTER and len(player_name) > 0: break
+                elif key.code == term.KEY_BACKSPACE: player_name = player_name[:-1]
+                elif len(player_name) < SETTINGS['MAX_NAME_LENGTH'] and not key.is_sequence and key.isalnum(): player_name += key.upper()
+            high_scores.append((game.elapsed_time, player_name))
+            save_high_scores(high_scores, table='sprint_highscores', db_cols=['time', 'name'], sort_key_func=lambda item: item[0], sort_reverse=False)
+
         while True:
             print(term.home + term.clear)
-            print(term.center(term.bold("🎉 NEW HIGH SCORE! 🎉")))
-            print(term.center(f"Your Score: {game.score}"))
-            print(term.center(f"Enter your name ({SETTINGS['MAX_NAME_LENGTH']} chars):"))
-            input_box = f" {player_name.ljust(SETTINGS['MAX_NAME_LENGTH'], '_')} "
-            print(term.center(term.reverse(input_box)))
+            scores_to_show = load_high_scores(table='sprint_highscores', select_cols='time, name', order_by_clause='time ASC')
+            result_msg = "40 LINES CLEARED!" if game.lines_cleared >= 40 else "GAME OVER"
+            print(term.move_y(term.height // 2 - 8) + term.center(term.bold(result_msg)))
+            print(term.center(f"Final Time: {format_time(game.elapsed_time)}"))
+            _display_high_scores_list(term, term.height // 2 - 4, "Top Sprint Times", scores_to_show, lambda vals: format_time(vals[0]))
+            print(term.move_y(term.height - 3) + term.center("Press 'SPACE' for Main Menu or 'q' to Quit"))
             key = term.inkey()
-            if key.code == term.KEY_ENTER and len(player_name) > 0: break
-            elif key.code == term.KEY_BACKSPACE: player_name = player_name[:-1]
-            elif len(player_name) < SETTINGS['MAX_NAME_LENGTH'] and not key.is_sequence and key.isalnum(): player_name += key.upper()
-        high_scores.append((game.score, player_name))
-        save_high_scores(high_scores)
-    while True:
-        print(term.home + term.clear)
-        print(term.move_y(term.height // 2 - 8) + term.center(term.bold("GAME OVER")))
-        print(term.center(f"Final Score: {game.score}"))
-        _display_high_scores_list(term, term.height // 2 - 4)
-        print(term.move_y(term.height - 3) + term.center("Press 'SPACE' for Main Menu or 'q' to Quit"))
-        key = term.inkey()
-        if key.lower() == ' ': return True
-        elif key.lower() == 'q': return False
+            if key.lower() == ' ': return True
+            elif key.lower() == 'q': return False
+        return
+
+    elif game.gamemode == 'timed':
+        high_scores = load_high_scores(table='timed_highscores', select_cols='score, lines, name', order_by_clause='score DESC, lines DESC')
+        is_high_score = (len(high_scores) < SETTINGS['MAX_SCORES'] or (game.score, game.lines_cleared) > (high_scores[-1][0], high_scores[-1][1]))
+        player_name = ""
+        if is_high_score and game.score > 0:
+            while True:
+                print(term.home + term.clear)
+                print(term.center(term.bold("🎉 NEW TIMED HIGH SCORE! 🎉")))
+                print(term.center(f"Your Score: {game.score} in {game.lines_cleared} lines"))
+                print(term.center(f"Enter your name ({SETTINGS['MAX_NAME_LENGTH']} chars):"))
+                input_box = f" {player_name.ljust(SETTINGS['MAX_NAME_LENGTH'], '_')} "
+                print(term.center(term.reverse(input_box)))
+                key = term.inkey()
+                if key.code == term.KEY_ENTER and len(player_name) > 0: break
+                elif key.code == term.KEY_BACKSPACE: player_name = player_name[:-1]
+                elif len(player_name) < SETTINGS['MAX_NAME_LENGTH'] and not key.is_sequence and key.isalnum(): player_name += key.upper()
+            high_scores.append((game.score, game.lines_cleared, player_name))
+            save_high_scores(high_scores, table='timed_highscores', db_cols=['score', 'lines', 'name'], sort_key_func=lambda item: (item[0], item[1]), sort_reverse=True)
+
+        while True:
+            print(term.home + term.clear)
+            scores_to_show = load_high_scores(table='timed_highscores', select_cols='score, lines, name', order_by_clause='score DESC, lines DESC')
+            print(term.move_y(term.height // 2 - 8) + term.center(term.bold("TIME'S UP!")))
+            print(term.center(f"Final Score: {game.score}"))
+            print(term.center(f"Lines Cleared: {game.lines_cleared}"))
+            _display_high_scores_list(term, term.height // 2 - 4, "Top Timed Scores", scores_to_show, lambda vals: f"{vals[0]} ({vals[1]}L)")
+            print(term.move_y(term.height - 3) + term.center("Press 'SPACE' for Main Menu or 'q' to Quit"))
+            key = term.inkey()
+            if key.lower() == ' ': return True
+            elif key.lower() == 'q': return False
+        return
+
+    elif game.gamemode == 'garbage':
+        high_scores = load_high_scores(table='garbage_highscores', select_cols='time, name', order_by_clause='time DESC')
+        is_high_score = (len(high_scores) < SETTINGS['MAX_SCORES'] or game.elapsed_time > high_scores[-1][0])
+        player_name = ""
+        if is_high_score and game.elapsed_time > 0:
+            while True:
+                print(term.home + term.clear)
+                print(term.center(term.bold("🎉 NEW SURVIVAL RECORD! 🎉")))
+                print(term.center(f"You Survived For: {format_time(game.elapsed_time)}"))
+                print(term.center(f"Enter your name ({SETTINGS['MAX_NAME_LENGTH']} chars):"))
+                input_box = f" {player_name.ljust(SETTINGS['MAX_NAME_LENGTH'], '_')} "
+                print(term.center(term.reverse(input_box)))
+                key = term.inkey()
+                if key.code == term.KEY_ENTER and len(player_name) > 0: break
+                elif key.code == term.KEY_BACKSPACE: player_name = player_name[:-1]
+                elif len(player_name) < SETTINGS['MAX_NAME_LENGTH'] and not key.is_sequence and key.isalnum(): player_name += key.upper()
+            high_scores.append((game.elapsed_time, player_name))
+            save_high_scores(high_scores, table='garbage_highscores', db_cols=['time', 'name'], sort_key_func=lambda item: item[0], sort_reverse=True)
+
+        while True:
+            print(term.home + term.clear)
+            scores_to_show = load_high_scores(table='garbage_highscores', select_cols='time, name', order_by_clause='time DESC')
+            print(term.move_y(term.height // 2 - 8) + term.center(term.bold("GAME OVER")))
+            print(term.center(f"Final Time: {format_time(game.elapsed_time)}"))
+            _display_high_scores_list(term, term.height // 2 - 4, "Top Survival Times", scores_to_show, lambda vals: format_time(vals[0]))
+            print(term.move_y(term.height - 3) + term.center("Press 'SPACE' for Main Menu or 'q' to Quit"))
+            key = term.inkey()
+            if key.lower() == ' ': return True
+            elif key.lower() == 'q': return False
+        return
+
+    else: # Standard Mode
+        # Load the full data for checking and appending
+        high_scores = load_high_scores(table='highscores', select_cols='score, time, lines, name', order_by_clause='score DESC')
+        is_high_score = len(high_scores) < SETTINGS['MAX_SCORES'] or game.score > high_scores[-1][0]
+        player_name = ""
+        if is_high_score and game.score > 0:
+            while True:
+                print(term.home + term.clear)
+                print(term.center(term.bold("🎉 NEW HIGH SCORE! 🎉")))
+                print(term.center(f"Your Score: {game.score}"))
+                print(term.center(f"Enter your name ({SETTINGS['MAX_NAME_LENGTH']} chars):"))
+                input_box = f" {player_name.ljust(SETTINGS['MAX_NAME_LENGTH'], '_')} "
+                print(term.center(term.reverse(input_box)))
+                key = term.inkey()
+                if key.code == term.KEY_ENTER and len(player_name) > 0: break
+                elif key.code == term.KEY_BACKSPACE: player_name = player_name[:-1]
+                elif len(player_name) < SETTINGS['MAX_NAME_LENGTH'] and not key.is_sequence and key.isalnum(): player_name += key.upper()
+
+            # Append the full data tuple to the list
+            high_scores.append((game.score, game.elapsed_time, game.lines_cleared, player_name))
+            # Save the updated list, ensuring all required columns are provided
+            save_high_scores(high_scores, table='highscores', db_cols=['score', 'time', 'lines', 'name'], sort_key_func=lambda item: item[0], sort_reverse=True)
+
+        while True:
+            print(term.home + term.clear)
+            # Load only the data needed for the simple display (score and name)
+            scores_to_show = load_high_scores(table='highscores', select_cols='score, name', order_by_clause='score DESC')
+            print(term.move_y(term.height // 2 - 8) + term.center(term.bold("GAME OVER")))
+            print(term.center(f"Final Score: {game.score}"))
+            _display_high_scores_list(term, term.height // 2 - 4, "Top Marathon Scores", scores_to_show, lambda vals: str(vals[0]))
+            print(term.move_y(term.height - 3) + term.center("Press 'SPACE' for Main Menu or 'q' to Quit"))
+            key = term.inkey()
+            if key.lower() == ' ': return True
+            elif key.lower() == 'q': return False
 
 def get_default_settings() -> dict:
     """Returns a dictionary containing all default game settings."""
     return {
         # Board and UI
-        "BOARD_WIDTH": 10, "BOARD_HEIGHT": 40, "PLAYFIELD_X_OFFSET": 25, "PLAYFIELD_Y_OFFSET": 2,
+        "BOARD_WIDTH": 10, "BOARD_HEIGHT": 22, "PLAYFIELD_X_OFFSET": 25, "PLAYFIELD_Y_OFFSET": 2,
         # High Scores
-        "MAX_SCORES": 10, "MAX_NAME_LENGTH": 3,
+        "MAX_SCORES": 5, "MAX_NAME_LENGTH": 3,
         # Timing
         "INITIAL_GRAVITY_INTERVAL": 1.0, "GRAVITY_LEVEL_MULTIPLIER": 0.09, "MIN_GRAVITY_INTERVAL": 0.1,
         "INPUT_TIMEOUT": 0.01, "RENDER_THROTTLE_MS": 16, "Lock Delay (s)": 0.5,
-        "FLASH_DURATION": 0.2,
+        "FLASH_DURATION": 0.2, "TIMED_MODE_DURATION_S": 120, "GARBAGE_INTERVAL_S": 15,
         # Gameplay
         "MIN_LEVEL": 1, "MAX_LEVEL": 15, "GHOST_PIECE_ENABLED": 1,
+        "SPRINT_DEFAULT_LEVEL": 1,
         # Scoring
         "SCORE_VALUES": {"SINGLE": 100, "DOUBLE": 300, "TRIPLE": 500, "TETRIS": 800, "T_SPIN_MINI": 100, "T_SPIN": 400, "T_SPIN_SINGLE": 800, "T_SPIN_DOUBLE": 1200, "T_SPIN_TRIPLE": 1600, "BACK_TO_BACK_MULTIPLIER": 1.5},
         # Keybindings
@@ -605,36 +742,34 @@ def get_default_settings() -> dict:
 
 def show_main_menu(term):
     selected_level = SETTINGS['MIN_LEVEL']
+    timed_selected_level = SETTINGS['MIN_LEVEL']
+    sprint_selected_level = SETTINGS.get('SPRINT_DEFAULT_LEVEL', 1)
+    garbage_selected_level = SETTINGS['MIN_LEVEL']
     save_exists = has_save_state()
-    menu_options = ["Play", "Settings", "Quit"]
+    menu_options = ["Marathon", "Sprint", "Timed", "Garbage", "Settings", "Quit"]
 
-    # Correctly add "Resume" to the top of the list if a save exists
     if save_exists:
         menu_options.insert(0, "Resume")
 
     selected_index = 0
     while True:
-        # 1. Clear the screen and draw static elements
         print(term.home + term.clear)
-        print(term.move_y(term.height // 2 - 12) + term.center(term.bold("Terminal Tetris")))
-        prompt_y = term.height - 6
-        print(term.move_y(prompt_y) + term.center("Press SPACE or ENTER to Select"))
-        print(term.move_y(prompt_y + 1) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."))
-        print(term.move_y(prompt_y + 2) + term.center("Press 'q' to Quit"))
-        print(term.move_y(prompt_y + 4) + term.center("""
-    Tetris © 1985~2025 Tetris Holding.
-    Tetris logos and Tetriminos are trademarks of Tetris Holding.
-    The Tetris trade dress is owned by Tetris Holding.
-    Licensed to The Tetris Company.
-    Tetris Game Design by Alexey Pajitnov.
-    Tetris Logo Design by Roger Dean.
-    Licensed to The Tetris Company.
-    All Rights Reserved."""))
-        scores_height = _display_high_scores_list(term, term.height // 2 - 9)
-        menu_y = term.height // 2 - 9 + scores_height + 2
+        print(term.move_y(1) + term.center(term.bold("Terminal Tetris")))
 
+        standard_scores = load_high_scores('highscores', 'score, name', 'score DESC')
+        scores_height = _display_high_scores_list(term, 3, "Top Marathon Scores", standard_scores, lambda vals: str(vals[0]))
 
-        # 2. Draw the dynamic menu, highlighting the current selection
+        sprint_scores = load_high_scores('sprint_highscores', 'time, name', 'time ASC')
+        sprint_scores_height = _display_high_scores_list(term, 3 + scores_height + 1, "Top Sprint Times", sprint_scores, lambda vals: format_time(vals[0]))
+
+        timed_scores = load_high_scores('timed_highscores', 'score, lines, name', 'score DESC, lines DESC')
+        timed_scores_height = _display_high_scores_list(term, 3 + scores_height + sprint_scores_height + 2, "Top Timed Scores", timed_scores, lambda vals: f"{vals[0]} ({vals[1]}L)")
+
+        garbage_scores = load_high_scores('garbage_highscores', 'time, name', 'time DESC')
+        garbage_scores_height = _display_high_scores_list(term, 3 + scores_height + sprint_scores_height + timed_scores_height + 3, "Top Survival Times", garbage_scores, lambda vals: format_time(vals[0]))
+
+        menu_y = 3 + scores_height + sprint_scores_height + timed_scores_height + garbage_scores_height + 4
+
         for i, option in enumerate(menu_options):
             line = f" {option} "
             if i == selected_index:
@@ -642,35 +777,43 @@ def show_main_menu(term):
             else:
                 print(term.move_y(menu_y + i) + term.center(line))
 
-        # 3. Only show the Level Selector if "Play" is the highlighted option
-        if menu_options[selected_index] == "Play":
-            print(term.move_y(menu_y + len(menu_options) + 1) + term.center(f"< Level {selected_level} >"))
-            print(term.center("(Use ←/→ to change)"))
+        current_selection = menu_options[selected_index]
+        if current_selection in ["Marathon", "Sprint", "Timed", "Garbage"]:
+             level_map = {"Marathon": selected_level, "Sprint": sprint_selected_level, "Timed": timed_selected_level, "Garbage": garbage_selected_level}
+             print(term.move_y(menu_y + len(menu_options) + 1) + term.center(f"< Starting Level {level_map[current_selection]} >"))
 
-        # 4. Wait for user input
+        prompt_y = term.height - 3
+        print(term.move_y(prompt_y) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."))
+        print(term.move_y(prompt_y + 1) + term.center("Press SPACE or ENTER to Select. 'q' to Quit."))
+
         key = term.inkey()
-
-        # 5. Handle key presses for navigation and selection
         if key.code == term.KEY_UP:
             selected_index = (selected_index - 1) % len(menu_options)
         elif key.code == term.KEY_DOWN:
             selected_index = (selected_index + 1) % len(menu_options)
-        elif key.code == term.KEY_LEFT and menu_options[selected_index] == "Play":
-            selected_level = max(SETTINGS['MIN_LEVEL'], selected_level - 1)
-        elif key.code == term.KEY_RIGHT and menu_options[selected_index] == "Play":
-            selected_level = min(SETTINGS['MAX_LEVEL'], selected_level + 1)
+        elif key.code == term.KEY_LEFT:
+            if current_selection == "Marathon": selected_level = max(SETTINGS['MIN_LEVEL'], selected_level - 1)
+            elif current_selection == "Sprint": sprint_selected_level = max(SETTINGS['MIN_LEVEL'], sprint_selected_level - 1)
+            elif current_selection == "Timed": timed_selected_level = max(SETTINGS['MIN_LEVEL'], timed_selected_level - 1)
+            elif current_selection == "Garbage": garbage_selected_level = max(SETTINGS['MIN_LEVEL'], garbage_selected_level - 1)
+        elif key.code == term.KEY_RIGHT:
+            if current_selection == "Marathon": selected_level = min(SETTINGS['MAX_LEVEL'], selected_level + 1)
+            elif current_selection == "Sprint": sprint_selected_level = min(SETTINGS['MAX_LEVEL'], sprint_selected_level + 1)
+            elif current_selection == "Timed": timed_selected_level = min(SETTINGS['MAX_LEVEL'], timed_selected_level + 1)
+            elif current_selection == "Garbage": garbage_selected_level = min(SETTINGS['MAX_LEVEL'], garbage_selected_level + 1)
         elif key.code == term.KEY_ENTER or key == ' ':
             selection = menu_options[selected_index]
-            if selection == "Resume":
-                return "RESUME"
-            elif selection == "Play":
-                return selected_level
+            if selection == "Resume": return "RESUME", None
+            elif selection == "Marathon": return "standard", selected_level
+            elif selection == "Sprint": return "sprint", sprint_selected_level
+            elif selection == "Timed": return "timed", timed_selected_level
+            elif selection == "Garbage": return "garbage", garbage_selected_level
             elif selection == "Settings":
                 show_settings(term)
-            elif selection == "Quit":
-                return None
+                continue
+            elif selection == "Quit": return None, None
         elif key.lower() == 'q':
-            return None
+            return None, None
 
 def show_score_editor(term: Terminal, scores_dict: dict) -> Optional[dict]:
     """Displays a sub-menu to edit dictionary values like SCORE_VALUES."""
@@ -711,9 +854,9 @@ def show_score_editor(term: Terminal, scores_dict: dict) -> Optional[dict]:
             elif isinstance(current_value, float):
                 temp_scores[option_name] = round(max(0.0, current_value + (increment * 0.1)), 2)
         elif key == 's' or key_event.code == term.KEY_ENTER:
-            return temp_scores # Return the edited dictionary
+            return temp_scores
         elif key == 'q':
-            return None # Return None to indicate cancellation
+            return None
 
 def show_settings(term):
     """
@@ -725,22 +868,16 @@ def show_settings(term):
 
     def draw_menu(selected_idx):
         """A single, reliable function to draw the entire settings menu."""
-        # 1. Start with a clean slate every time.
         print(term.home + term.clear, end="")
-
-        # 2. Draw static header and instructions.
         print(term.move_y(2) + term.center(term.bold("--- Game Settings ---")), end="")
         print(term.move_y(term.height - 5) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."), end="")
         print(term.move_y(term.height - 4) + term.center("Press ENTER to change a keybinding or edit values."), end="")
         print(term.move_y(term.height - 3) + term.center("Press 's' to Save & Exit"), end="")
         print(term.move_y(term.height - 2) + term.center("Press 'q' to Discard & Exit to Main Menu."), end="")
-        print(term.move_y(term.height - 1) + term.center("Press 'd' to Restore Defaults."), end="")
+        print(term.move_y(term.height - 1) + term.center("Press 'r' to Restore Defaults."), end="")
 
-        # 3. Draw each menu item.
         for i, option_name in enumerate(setting_options):
             value = temp_settings[option_name]
-
-            # Determine the display value string
             display_value = ""
             if option_name == "GHOST_PIECE_ENABLED":
                 display_value = "Enabled" if value == 1 else "Disabled"
@@ -752,30 +889,17 @@ def show_settings(term):
                 display_value = get_key_display_name(str(value))
 
             line_text = f"{option_name:.<35} {display_value}"
-
-            # Apply styling for the selected line
-            if i == selected_idx:
-                final_line = term.center(term.reverse(line_text))
-            else:
-                final_line = term.center(line_text)
-
-            # Print the line to its correct position
+            final_line = term.center(term.reverse(line_text) if i == selected_idx else line_text)
             print(term.move_y(5 + i) + final_line, end="")
-
-        # 4. Flush all changes to the screen at once.
         sys.stdout.flush()
 
-    # --- Main Logic Loop ---
-    # Initial draw of the menu
     draw_menu(selected_index)
 
     while True:
-        # Wait for user input
         key_event = term.inkey()
         if not key_event: continue
         key = get_key_repr(key_event)
 
-        # Handle input and update state
         option_name = setting_options[selected_index]
         current_value = temp_settings.get(option_name)
 
@@ -788,13 +912,14 @@ def show_settings(term):
                 temp_settings[option_name] = 1 - current_value
             else:
                 increment = 1 if key == "KEY_RIGHT" else -1
+                if option_name in ["TIMED_MODE_DURATION_S", "GARBAGE_INTERVAL_S"]:
+                    increment *= 5
                 if isinstance(current_value, int):
-                    temp_settings[option_name] += increment
+                    temp_settings[option_name] = max(1, current_value + increment)
                 elif isinstance(current_value, float):
-                    temp_settings[option_name] = round(current_value + (increment * 0.05), 2)
+                    temp_settings[option_name] = round(max(0.01, current_value + (increment * 0.05)), 2)
         elif key_event.code == term.KEY_ENTER:
             if "Key:" in option_name:
-                # This prompt logic can be kept simple as it's temporary
                 prompt_y = term.height - 7
                 prompt = f"Press new key for {option_name}..."
                 print(term.move_y(prompt_y) + term.center(term.black_on_yellow(prompt.ljust(len(prompt)+2))))
@@ -803,7 +928,7 @@ def show_settings(term):
                 updated_dict = show_score_editor(term, current_value)
                 if updated_dict is not None:
                     temp_settings[option_name] = updated_dict
-        elif key.lower() == 'd':
+        elif key.lower() == 'r':
             prompt_y = term.height - 7
             prompt = "Reset all settings to default? (y/n)"
             print(term.move_y(prompt_y) + term.center(term.black_on_red(prompt.ljust(len(prompt)+2))))
@@ -817,89 +942,7 @@ def show_settings(term):
         elif key.lower() == 'q':
             return
 
-        # After any change, redraw the entire menu to ensure a correct state.
         draw_menu(selected_index)
-
-    while True:
-        # Update visuals only if selection changed
-        if selected_index != previous_index:
-            draw_line(previous_index, is_selected=False) # De-highlight old
-            draw_line(selected_index, is_selected=True)  # Highlight new
-            sys.stdout.flush()
-
-        previous_index = selected_index
-
-        # Wait for input
-        key_event = term.inkey()
-        key = get_key_repr(key_event)
-
-        # Handle input and update state
-        option_name = setting_options[selected_index]
-        current_value = temp_settings.get(option_name)
-
-        if key == "KEY_UP":
-            selected_index = (selected_index - 1) % len(setting_options)
-        elif key == "KEY_DOWN":
-            selected_index = (selected_index + 1) % len(setting_options)
-
-        elif key in ["KEY_LEFT", "KEY_RIGHT"]:
-            if option_name == "GHOST_PIECE_ENABLED":
-                temp_settings[option_name] = 1 - current_value #says its a bug but won't work without it
-
-            else:
-                increment = 1 if key == "KEY_RIGHT" else -1
-                if isinstance(current_value, int):
-                    temp_settings[option_name] += increment
-                elif isinstance(current_value, float):
-                    temp_settings[option_name] = round(current_value + (increment * 0.05), 2)
-            draw_line(selected_index, is_selected=True) # Redraw the updated line
-            sys.stdout.flush()
-
-        elif key_event.code == term.KEY_ENTER:
-            if "Key:" in option_name:
-                prompt_y = term.height - 7
-                prompt = f"Press new key for {option_name}..."
-                with term.location(y=prompt_y):
-                    print(term.center(term.black_on_yellow(prompt.ljust(len(prompt)+2))))
-
-                temp_settings[option_name] = get_key_repr(term.inkey())
-
-                with term.location(y=prompt_y):
-                    print(term.center(" " * (len(prompt) + 2))) # Clear prompt
-                draw_line(selected_index, is_selected=True)
-                sys.stdout.flush()
-
-            elif isinstance(current_value, dict):
-                updated_dict = show_score_editor(term, current_value)
-                if updated_dict is not None:
-                    temp_settings[option_name] = updated_dict
-                # A full redraw is necessary after returning from a sub-menu
-                redraw_all(selected_index)
-
-        elif key.lower() == 'd':
-            prompt_y = term.height - 7
-            prompt = "Reset all settings to default? (y/n)"
-            with term.location(y=prompt_y):
-                print(term.center(term.black_on_red(prompt.ljust(len(prompt)+2))))
-
-            confirm_key = term.inkey()
-            with term.location(y=prompt_y):
-                print(term.center(" " * (len(prompt) + 2))) # Clear prompt
-
-            if confirm_key.lower() == 'y':
-                temp_settings = get_default_settings()
-                redraw_all(selected_index)
-            else: # Redraw the line the prompt was covering
-                draw_line(selected_index, is_selected=True)
-                sys.stdout.flush()
-
-        elif key.lower() == 's':
-            save_settings(temp_settings)
-            load_settings()
-            return
-
-        elif key.lower() == 'q':
-            return
 
 
 def main():
@@ -907,46 +950,43 @@ def main():
     initialize_database()
     load_settings()
     term = Terminal()
+
     with term.fullscreen(), term.cbreak(), term.hidden_cursor():
         try:
             while True:
-                menu_choice = show_main_menu(term)
+                gamemode, start_level = show_main_menu(term)
 
-                if menu_choice is None:
-                    break # Quit
+                if gamemode is None:
+                    break # Quit from main menu
 
                 game = None
-                if menu_choice == "RESUME":
+                if gamemode == "RESUME":
                     game = load_game_state()
-                else: # Is a start_level
-                    game = Game(start_level=menu_choice)
+                else:
+                    game = Game(gamemode=gamemode, start_level=start_level)
 
                 if game:
-                    print(term.home + term.clear)
-                    draw_board_border(term)
-                    draw_ui(term, game)
-                    sys.stdout.flush()
-
                     game_loop(term, game)
-                    if game.quit_after_save:
-                        sys.exit(0)
 
-                    # After game over, clear the save state
-                    delete_save_state()
+                    if game.quit_after_save:
+                        break
+
+                    if game.gamemode not in ['sprint', 'timed', 'garbage']:
+                        delete_save_state()
 
                     if not handle_game_over(term, game):
-                        break # Quit from game over screen
+                        break
 
-        except KeyboardInterrupt: pass
-        except Exception as e:
-            # This block might not print if the terminal state is corrupted.
-            # It's here as a last resort.
+        except KeyboardInterrupt:
             pass
-    # After exiting the blessed context, we can safely print errors.
+        except Exception as e:
+            with open("tetris_error.log", "w") as f:
+                f.write(f"An unexpected error occurred: {e}\n")
+                import traceback
+                traceback.print_exc(file=f)
+
     if 'e' in locals() and isinstance(e, Exception):
-        print("An unexpected error occurred:")
-        import traceback
-        traceback.print_exc()
+        print("An unexpected error occurred. A log file 'tetris_error.log' has been created.")
         input("Press Enter to exit...")
 
 if __name__ == "__main__":

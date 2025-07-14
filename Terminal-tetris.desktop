@@ -1,0 +1,33 @@
+[Desktop Entry]
+Version=0.1
+Categories=Game;ArcadeGame;
+Type=Application
+Icon=games-arcade
+Comment[en_US]=A classic Tetris game for the terminal
+Comment=A classic Tetris game for the terminal
+
+GenericName[en_US]=Terminal Tetris
+GenericName=Terminal Tetris
+
+Name[en_US]=Terminal-Tetris
+Name=Terminal-Tetris
+
+#Here's the exec, I think it's best to set path and just use 'python terminal-tetris.py'
+Exec=python terminal-tetris.py
+
+# set this to where to you downloaded the game or want it to be, the '~' is the home directory
+# this will eventually be replaced with a proper path once I package it
+Path=~/PROJECTS/python/terminal-tetris
+
+# This is needed, otherwise you could use $TERM -e or something like that
+Terminal=true
+
+# Need to figure out how to set the terminal size, 80x60 returns failed to launch child
+TerminalOptions=
+
+
+#I dunno what it wants here? and I don't care
+MimeType=
+X-KDE-SubstituteUID=false
+X-KDE-Username=
+StartupNotify=false
