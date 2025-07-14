@@ -8,6 +8,8 @@ Author: avery
 """
 
 # Import necessary libraries
+from ast import Index
+from contextlib import nullcontext
 import time
 import sys
 import collections
@@ -46,6 +48,7 @@ def initialize_database():
         cursor = conn.cursor()
         cursor.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
         cursor.execute('CREATE TABLE IF NOT EXISTS highscores (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, score INTEGER NOT NULL)')
+        cursor.execute('CREATE TABLE IF NOT EXISTS saved_game (id INTEGER PRIMARY KEY, game_state TEXT NOT NULL)') #INIT SAVED GAME TABLE
 
 def save_settings(settings_dict):
     """Saves the entire settings dictionary to the database."""
@@ -161,6 +164,7 @@ class Game:
         self.is_back_to_back: bool = False
         self.last_move_was_rotation: bool = False
         self.lock_delay_start_time: float = 0
+        self.quit_after_save: bool = False
 
         # NEW: Attributes for flash animation
         self.lines_to_flash = []
@@ -377,7 +381,7 @@ def draw_ui(term, game):
 
     controls_y = hold_box_y + 8
     print(term.move_xy(hold_box_x, controls_y) + term.bold("Controls:"))
-    controls = {"Move": f"{get_key_display_name(SETTINGS['Key: Left'])}/{get_key_display_name(SETTINGS['Key: Right'])}", "Rotate": get_key_display_name(SETTINGS['Key: Rotate']), "Soft Drop": get_key_display_name(SETTINGS['Key: Soft Drop']), "Hard Drop": get_key_display_name(SETTINGS['Key: Hard Drop']), "Hold": get_key_display_name(SETTINGS['Key: Hold']), "Pause": "P", "Quit": "Q"}
+    controls = {"Move": f"{get_key_display_name(SETTINGS['Key: Left'])}/{get_key_display_name(SETTINGS['Key: Right'])}", "Rotate": get_key_display_name(SETTINGS['Key: Rotate']), "Soft Drop": get_key_display_name(SETTINGS['Key: Soft Drop']), "Hard Drop": get_key_display_name(SETTINGS['Key: Hard Drop']), "Hold": get_key_display_name(SETTINGS['Key: Hold']), "Pause": "P", "Save (Paused)": "S", "Quit": "Q"}
     for i, (action, key) in enumerate(controls.items()): print(term.move_xy(hold_box_x, controls_y + 1 + i) + f"{key:<10}: {action}")
 
 def draw_game_state(term, game):
@@ -423,6 +427,82 @@ def draw_game_state(term, game):
         msg = "PAUSED"
         print(term.move_xy(SETTINGS['PLAYFIELD_X_OFFSET'] + SETTINGS['BOARD_WIDTH'] - len(msg)//2, SETTINGS['PLAYFIELD_Y_OFFSET'] + SETTINGS['BOARD_HEIGHT']//2) + term.black_on_white(msg))
 
+def save_game_state(game: 'Game'):
+    """Serializes the game state and saves it to the database."""
+    state = {
+        'board': game.board,
+        'score': game.score,
+        'lines_cleared': game.lines_cleared,
+        'level': game.level,
+        'current_piece': {
+            'shape_name': game.current_piece.shape_name,
+            'x': game.current_piece.x,
+            'y': game.current_piece.y,
+            'rotation': game.current_piece.rotation,
+        },
+        'hold_piece': {
+            'shape_name': game.hold_piece.shape_name,
+        } if game.hold_piece else None,
+        'can_hold': game.can_hold,
+        'upcoming_pieces': list(game.upcoming_pieces),
+        'bag': game.bag,
+        'is_back_to_back': game.is_back_to_back,
+    }
+    with sqlite3.connect(DATABASE_FILE) as conn:
+        cursor = conn.cursor()
+        # Overwrite the single save state row (id=1)
+        cursor.execute("INSERT OR REPLACE INTO saved_game (id, game_state) VALUES (1, ?)", (json.dumps(state),))
+
+def load_game_state() -> Optional['Game']:
+    """Loads a game state from the database and reconstructs the Game object."""
+    with sqlite3.connect(DATABASE_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT game_state FROM saved_game WHERE id = 1")
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+    state = json.loads(row[0])
+    # Create a new game instance at the correct level to ensure gravity is right
+    game = Game(start_level=state['level'])
+
+    # Reconstruct the game state from the loaded data
+    game.board = state['board']
+    game.score = state['score']
+    game.lines_cleared = state['lines_cleared']
+    game.level = state['level']
+    game.can_hold = state['can_hold']
+    game.upcoming_pieces = collections.deque(state['upcoming_pieces'])
+    game.bag = state['bag']
+    game.is_back_to_back = state['is_back_to_back']
+
+    # Reconstruct pieces
+    cp_state = state['current_piece']
+    game.current_piece = Piece(cp_state['shape_name'])
+    game.current_piece.x = cp_state['x']
+    game.current_piece.y = cp_state['y']
+    game.current_piece.rotation = cp_state['rotation']
+
+    if state['hold_piece']:
+        hp_state = state['hold_piece']
+        game.hold_piece = Piece(hp_state['shape_name'])
+
+    return game
+
+def delete_save_state():
+    """Deletes the saved game state from the database."""
+    with sqlite3.connect(DATABASE_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM saved_game WHERE id = 1")
+
+def has_save_state() -> bool:
+    """Checks if a saved game exists in the database."""
+    with sqlite3.connect(DATABASE_FILE) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM saved_game WHERE id = 1")
+        return cursor.fetchone() is not None
+
+
 def get_key_repr(key):
     if key.is_sequence: return key.name
     return str(key)
@@ -431,6 +511,16 @@ def handle_input(term: Terminal, game: Game):
     key_event = term.inkey(timeout=SETTINGS['INPUT_TIMEOUT'])
     if not key_event: return
     key = get_key_repr(key_event)
+    if game.paused and key.lower() == 's':
+        save_game_state(game)
+        # Display a temporary message (optional, but good for user feedback)
+        msg = "GAME SAVED"
+        print(term.move_xy(SETTINGS['PLAYFIELD_X_OFFSET'] + SETTINGS['BOARD_WIDTH'] - len(msg)//2, SETTINGS['PLAYFIELD_Y_OFFSET'] + SETTINGS['BOARD_HEIGHT']//2 + 2) + term.black_on_green(msg))
+        sys.stdout.flush()
+        time.sleep(1) # Pause to show the message
+        game.quit_after_save = True
+        game.game_over = True
+        return # Prevent other actions
     if not game.paused:
         if key == SETTINGS["Key: Left"]: game.move(-1)
         elif key == SETTINGS["Key: Right"]: game.move(1)
@@ -515,33 +605,72 @@ def get_default_settings() -> dict:
 
 def show_main_menu(term):
     selected_level = SETTINGS['MIN_LEVEL']
+    save_exists = has_save_state()
+    menu_options = ["Play", "Settings", "Quit"]
+
+    # Correctly add "Resume" to the top of the list if a save exists
+    if save_exists:
+        menu_options.insert(0, "Resume")
+
+    selected_index = 0
     while True:
+        # 1. Clear the screen and draw static elements
         print(term.home + term.clear)
         print(term.move_y(term.height // 2 - 12) + term.center(term.bold("Terminal Tetris")))
+        prompt_y = term.height - 6
+        print(term.move_y(prompt_y) + term.center("Press SPACE or ENTER to Select"))
+        print(term.move_y(prompt_y + 1) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."))
+        print(term.move_y(prompt_y + 2) + term.center("Press 'q' to Quit"))
+        print(term.move_y(prompt_y + 4) + term.center("""
+    Tetris © 1985~2025 Tetris Holding.
+    Tetris logos and Tetriminos are trademarks of Tetris Holding.
+    The Tetris trade dress is owned by Tetris Holding.
+    Licensed to The Tetris Company.
+    Tetris Game Design by Alexey Pajitnov.
+    Tetris Logo Design by Roger Dean.
+    Licensed to The Tetris Company.
+    All Rights Reserved."""))
         scores_height = _display_high_scores_list(term, term.height // 2 - 9)
         menu_y = term.height // 2 - 9 + scores_height + 2
-        print(term.move_y(menu_y) + term.center(term.bold("--- Level Select ---")))
-        print(term.center(f"< Level {selected_level} >"))
-        print(term.center("(Use ←/→ to change)"))
-        prompt_y = term.height - 5
-        print(term.move_y(prompt_y) + term.center("Press SPACE to Play"))
-        print(term.move_y(prompt_y + 1) + term.center("Press 's' for Settings"))
-        print(term.move_y(prompt_y + 2) + term.center("Press 'q' to Quit"))
-        print(term.move_y(prompt_y + 3) + term.center("""
-            Tetris © 1985~2025 Tetris Holding.
-            Tetris logos and Tetriminos are trademarks of Tetris Holding.
-            The Tetris trade dress is owned by Tetris Holding.
-            Licensed to The Tetris Company.
-            Tetris Game Design by Alexey Pajitnov.
-            Tetris Logo Design by Roger Dean.
-            Licensed to The Tetris Company.
-            All Rights Reserved."""))
+
+
+        # 2. Draw the dynamic menu, highlighting the current selection
+        for i, option in enumerate(menu_options):
+            line = f" {option} "
+            if i == selected_index:
+                print(term.move_y(menu_y + i) + term.center(term.reverse(line)))
+            else:
+                print(term.move_y(menu_y + i) + term.center(line))
+
+        # 3. Only show the Level Selector if "Play" is the highlighted option
+        if menu_options[selected_index] == "Play":
+            print(term.move_y(menu_y + len(menu_options) + 1) + term.center(f"< Level {selected_level} >"))
+            print(term.center("(Use ←/→ to change)"))
+
+        # 4. Wait for user input
         key = term.inkey()
-        if key == ' ': return selected_level
-        elif key == 'q': return None
-        elif key.code == term.KEY_LEFT: selected_level = max(SETTINGS['MIN_LEVEL'], selected_level - 1)
-        elif key.code == term.KEY_RIGHT: selected_level = min(SETTINGS['MAX_LEVEL'], selected_level + 1)
-        elif key == 's': show_settings(term)
+
+        # 5. Handle key presses for navigation and selection
+        if key.code == term.KEY_UP:
+            selected_index = (selected_index - 1) % len(menu_options)
+        elif key.code == term.KEY_DOWN:
+            selected_index = (selected_index + 1) % len(menu_options)
+        elif key.code == term.KEY_LEFT and menu_options[selected_index] == "Play":
+            selected_level = max(SETTINGS['MIN_LEVEL'], selected_level - 1)
+        elif key.code == term.KEY_RIGHT and menu_options[selected_index] == "Play":
+            selected_level = min(SETTINGS['MAX_LEVEL'], selected_level + 1)
+        elif key.code == term.KEY_ENTER or key == ' ':
+            selection = menu_options[selected_index]
+            if selection == "Resume":
+                return "RESUME"
+            elif selection == "Play":
+                return selected_level
+            elif selection == "Settings":
+                show_settings(term)
+            elif selection == "Quit":
+                return None
+        elif key.lower() == 'q':
+            return None
 
 def show_score_editor(term: Terminal, scores_dict: dict) -> Optional[dict]:
     """Displays a sub-menu to edit dictionary values like SCORE_VALUES."""
@@ -588,58 +717,108 @@ def show_score_editor(term: Terminal, scores_dict: dict) -> Optional[dict]:
 
 def show_settings(term):
     """
-    Displays the settings menu, optimized to reduce flickering by only
-    redrawing parts of the screen that have changed.
+    Displays the settings menu, with robust rendering to prevent visual glitches.
     """
     temp_settings = copy.deepcopy(SETTINGS)
     setting_options = list(temp_settings.keys())
     selected_index = 0
 
-    def redraw_all(selected_idx):
-        """Clears and redraws the entire settings screen."""
+    def draw_menu(selected_idx):
+        """A single, reliable function to draw the entire settings menu."""
+        # 1. Start with a clean slate every time.
         print(term.home + term.clear, end="")
+
+        # 2. Draw static header and instructions.
         print(term.move_y(2) + term.center(term.bold("--- Game Settings ---")), end="")
-
-        for i, option in enumerate(setting_options):
-            draw_line(i, is_selected=(i == selected_idx))
-
-        # Instructions
         print(term.move_y(term.height - 5) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."), end="")
         print(term.move_y(term.height - 4) + term.center("Press ENTER to change a keybinding or edit values."), end="")
-        print(term.move_y(term.height - 3) + term.center("Press 's' to Save & Exit, or 'q' to Discard & Exit."), end="")
-        print(term.move_y(term.height - 2) + term.center("Press 'd' to Restore Defaults."), end="")
+        print(term.move_y(term.height - 3) + term.center("Press 's' to Save & Exit"), end="")
+        print(term.move_y(term.height - 2) + term.center("Press 'q' to Discard & Exit to Main Menu."), end="")
+        print(term.move_y(term.height - 1) + term.center("Press 'd' to Restore Defaults."), end="")
+
+        # 3. Draw each menu item.
+        for i, option_name in enumerate(setting_options):
+            value = temp_settings[option_name]
+
+            # Determine the display value string
+            display_value = ""
+            if option_name == "GHOST_PIECE_ENABLED":
+                display_value = "Enabled" if value == 1 else "Disabled"
+            elif isinstance(value, dict):
+                display_value = "[Press Enter to Edit]"
+            elif isinstance(value, float):
+                display_value = f"{value:.2f}"
+            else:
+                display_value = get_key_display_name(str(value))
+
+            line_text = f"{option_name:.<35} {display_value}"
+
+            # Apply styling for the selected line
+            if i == selected_idx:
+                final_line = term.center(term.reverse(line_text))
+            else:
+                final_line = term.center(line_text)
+
+            # Print the line to its correct position
+            print(term.move_y(5 + i) + final_line, end="")
+
+        # 4. Flush all changes to the screen at once.
         sys.stdout.flush()
 
-    def draw_line(index, is_selected):
-        """Draws a single line of the settings menu."""
-        option_name = setting_options[index]
-        value = temp_settings[option_name]
+    # --- Main Logic Loop ---
+    # Initial draw of the menu
+    draw_menu(selected_index)
 
-        # Determine the display value string
-        display_value = ""
-        if option_name == "GHOST_PIECE_ENABLED":
-            display_value = "Enabled" if value == 1 else "Disabled"
-        elif isinstance(value, dict):
-            display_value = "[Press Enter to Edit]"
-        elif isinstance(value, float):
-            display_value = f"{value:.2f}"
-        else:
-            display_value = get_key_display_name(str(value))
+    while True:
+        # Wait for user input
+        key_event = term.inkey()
+        if not key_event: continue
+        key = get_key_repr(key_event)
 
-        line = f"{option_name:.<35} {display_value}"
+        # Handle input and update state
+        option_name = setting_options[selected_index]
+        current_value = temp_settings.get(option_name)
 
-        with term.location(y=5 + index):
-            # Center the line. Add padding to clear previous, longer text.
-            print(term.center(line.ljust(50)))
+        if key == "KEY_UP":
+            selected_index = (selected_index - 1) % len(setting_options)
+        elif key == "KEY_DOWN":
+            selected_index = (selected_index + 1) % len(setting_options)
+        elif key in ["KEY_LEFT", "KEY_RIGHT"]:
+            if option_name == "GHOST_PIECE_ENABLED":
+                temp_settings[option_name] = 1 - current_value
+            else:
+                increment = 1 if key == "KEY_RIGHT" else -1
+                if isinstance(current_value, int):
+                    temp_settings[option_name] += increment
+                elif isinstance(current_value, float):
+                    temp_settings[option_name] = round(current_value + (increment * 0.05), 2)
+        elif key_event.code == term.KEY_ENTER:
+            if "Key:" in option_name:
+                # This prompt logic can be kept simple as it's temporary
+                prompt_y = term.height - 7
+                prompt = f"Press new key for {option_name}..."
+                print(term.move_y(prompt_y) + term.center(term.black_on_yellow(prompt.ljust(len(prompt)+2))))
+                temp_settings[option_name] = get_key_repr(term.inkey())
+            elif isinstance(current_value, dict):
+                updated_dict = show_score_editor(term, current_value)
+                if updated_dict is not None:
+                    temp_settings[option_name] = updated_dict
+        elif key.lower() == 'd':
+            prompt_y = term.height - 7
+            prompt = "Reset all settings to default? (y/n)"
+            print(term.move_y(prompt_y) + term.center(term.black_on_red(prompt.ljust(len(prompt)+2))))
+            confirm_key = term.inkey()
+            if confirm_key.lower() == 'y':
+                temp_settings = get_default_settings()
+        elif key.lower() == 's':
+            save_settings(temp_settings)
+            load_settings()
+            return
+        elif key.lower() == 'q':
+            return
 
-        with term.location(y=5 + index):
-             if is_selected:
-                print(term.center(term.reverse(line)))
-             else:
-                print(term.center(line))
-
-    redraw_all(selected_index)
-    previous_index = selected_index
+        # After any change, redraw the entire menu to ensure a correct state.
+        draw_menu(selected_index)
 
     while True:
         # Update visuals only if selection changed
@@ -731,15 +910,33 @@ def main():
     with term.fullscreen(), term.cbreak(), term.hidden_cursor():
         try:
             while True:
-                start_level = show_main_menu(term)
-                if start_level is None: break
-                print(term.home + term.clear) # Clear screen once before a new game
-                draw_board_border(term)
-                draw_ui(term, Game(start_level=start_level)) # Draw the static UI elements
-                sys.stdout.flush()
-                game = Game(start_level=start_level)
-                game_loop(term, game)
-                if not handle_game_over(term, game): break
+                menu_choice = show_main_menu(term)
+
+                if menu_choice is None:
+                    break # Quit
+
+                game = None
+                if menu_choice == "RESUME":
+                    game = load_game_state()
+                else: # Is a start_level
+                    game = Game(start_level=menu_choice)
+
+                if game:
+                    print(term.home + term.clear)
+                    draw_board_border(term)
+                    draw_ui(term, game)
+                    sys.stdout.flush()
+
+                    game_loop(term, game)
+                    if game.quit_after_save:
+                        sys.exit(0)
+
+                    # After game over, clear the save state
+                    delete_save_state()
+
+                    if not handle_game_over(term, game):
+                        break # Quit from game over screen
+
         except KeyboardInterrupt: pass
         except Exception as e:
             # This block might not print if the terminal state is corrupted.
