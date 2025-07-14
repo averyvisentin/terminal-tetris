@@ -1,12 +1,15 @@
 # Terminal Tetris
 
 This is a terminal-based Tetris game written in Python. It aims to be a feature-rich implementation of the classic game with modern mechanics. This project was created for personal use.
-![sceenshot](./screenshots/game.png) ![sceenshot](./screenshots/settings.png)
+-----
+
+![screenshot](./screenshots/game.png) ![screenshot](./screenshots/settings.png)
 -----
 
 ## Features
 
   * **Classic Tetris Gameplay**: A fully-featured Tetris implementation for the terminal.
+  * **GAMEMODES**: We've got Marathon, Sprint, Timed. We even got Garbage.
   * **Modern Mechanics**: Includes advanced mechanics like T-Spin detection and a back-to-back bonus system.
   * **Save state**: Includes a save state feature that allows you to pause the game and resume it later. (hit 's' while game is paused). Saving will close the game. Resume from Main Menu on next startup.
   * **Hold Functionality**: Swap out the current piece with a stored piece.
@@ -17,7 +20,9 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
   * **Level Progression**: The game's speed increases as you clear more lines.
   * **Proper Lock Delay**: A half-second delay after a piece touches a surface, allowing for last-second adjustments. (adjustable in Settings Menu)
   * **Bag Randomization**: A 7-bag randomization system ensures that all seven tetrominoes will appear in a random order before any are repeated.
-![sceenshot](./screenshots/main-menu.png)
+
+-----
+![screenshot](./screenshots/main-menu.png)
 -----
 
 ## How to Play
@@ -36,6 +41,7 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
     ```bash
     pip install -r requirements.txt
     ```
+
 https://github.com/jquast/blessed
 
 https://pypi.org/project/blessed/
@@ -69,7 +75,11 @@ A shell script is also provided for convenience:
 | `p`         | Pause         |
 | `s`         | Save (paused) |
 | `q`         | Quit          |
+
+-----
+
 ![sceenshot](./screenshots/game-paused.png)
+
 -----
 
 ## Scoring
@@ -95,8 +105,11 @@ The scoring system is based on modern Tetris guidelines, with the base score mul
 
 The game keeps track of the top 5 high scores in a `tetris.db` file. If you achieve a high score, you will be prompted to enter a three-character name.
 
+-----
 
-![sceenshot](./screenshots/game-over.png)
+![screenshot](./screenshots/game-over.png)
+
+-----
 
 ## Inspirations
 
