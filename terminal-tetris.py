@@ -347,7 +347,9 @@ def draw_ui(term, game):
     print(term.move_xy(0, 0) + term.bold_underline("Terminal Tetris"))
     def draw_box(x, y, w, h, title, content=""):
         print(term.move_xy(x, y) + f"╔{'═'*(w-2)}╗")
-        print(term.move_xy(x, y + 1) + f"║ {term.bold(title):<{w-3}}║")
+        padding_size = (w - 2) - term.length(title) - 1
+        padding = ' ' * padding_size
+        print(term.move_xy(x, y + 1) + f"║ {title}{padding}║")
         for i in range(2, h - 1): print(term.move_xy(x, y + i) + f"║{' '*(w-2)}║")
         print(term.move_xy(x, y + h -1) + f"╚{'═'*(w-2)}╝")
         if content: print(term.move_xy(x + 2, y + 2) + str(content))
