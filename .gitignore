@@ -1,0 +1,4 @@
+# Build and distribution artifacts
+/dist/
+# Virtual Environment
+/.venv/

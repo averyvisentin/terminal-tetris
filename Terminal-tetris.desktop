@@ -12,12 +12,12 @@ GenericName=Terminal Tetris
 Name[en_US]=Terminal-Tetris
 Name=Terminal-Tetris
 
-#Here's the exec, I think it's best to set path and just use 'python terminal-tetris.py'
-Exec=python terminal-tetris.py
+#Here's the exec, I think it's best to set path and just use 'python main.py'
+Exec=python main.py
 
 # set this to where to you downloaded the game or want it to be, the '~' is the home directory
 # this will eventually be replaced with a proper path once I package it
-Path=~/PROJECTS/python/terminal-tetris
+Path=~/PROJECTS/python/terminal-tetris/src/terminal_tetris
 
 # This is needed, otherwise you could use $TERM -e or something like that
 Terminal=true

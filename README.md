@@ -11,7 +11,7 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
   * **Classic Tetris Gameplay**: A fully-featured Tetris implementation for the terminal.
   * **GAMEMODES**: We've got Marathon, Sprint, Timed. We even got Garbage.
   * **Modern Mechanics**: Includes advanced mechanics like T-Spin detection and a back-to-back bonus system.
-  * **Save state**: Includes a save state feature that allows you to pause the game and resume it later. (hit 's' while game is paused). Saving will close the game. Resume from Main Menu on next startup.
+  * **Save state**: Includes a save state feature that allows you to pause the game and resume it later. (hit 's' while game is paused). Saving will close the game. Resume from Main Menu on next startup. **only works on marathon right now**
   * **Hold Functionality**: Swap out the current piece with a stored piece.
   * **Persistent Database**: All high scores and user settings are saved to a local tetris.db file, so your progress and customizations are always remembered.
   * **Settings Menu**: Customize everything from keybindings to game physics and scoring values.
@@ -29,22 +29,10 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
 
 ### Installation
 
-1.  Clone the repository:
+1.  Install with pip or whatver you use:
     ```bash
-    git clone https://github.com/averyvisentin/terminal-tetris.git
+    pip install terminal-tetris
     ```
-2.  Navigate to the project directory:
-    ```bash
-    cd terminal-tetris
-    ```
-3.  Install the required `blessed` library: #I'm using the arch package python-blessed.
-    ```bash
-    pip install -r requirements.txt
-    ```
-
-https://github.com/jquast/blessed
-
-https://pypi.org/project/blessed/
 
 
 ### Running the Game
@@ -52,14 +40,9 @@ https://pypi.org/project/blessed/
 You can run the game using the following command:
 
 ```bash
-python terminal-tetris.py
+terminal-tetris
 ```
 
-A shell script is also provided for convenience:
-
-```bash
-./launch.sh
-```
 
 -----
 
@@ -115,3 +98,21 @@ The game keeps track of the top 5 high scores in a `tetris.db` file. If you achi
 
 I really wanted something lightweight and fun to play while I waited for things to load, compile, laundry to finish, and other mundane tasks.
 I was heavily inspired by the classic Tetris game on the gameboy, shtris, and vitetris.
+
+## Credits
+
+Tetris © 1985~2025 Tetris Holding.
+Tetris logos, Tetris theme song and Tetriminos are trademarks of Tetris Holding.
+The Tetris trade dress is owned by Tetris Holding.
+Licensed to The Tetris Company.
+Tetris Game Design by Alexey Pajitnov.
+Tetris Logo Design by Roger Dean.
+All Rights Reserved.
+
+- [blessed @ github](https://github.com/jquast/blessed)
+- [blessed @ pypi](https://pypi.org/project/blessed/)
+- [shtris @ github](https://github.com/ContentsViewer/shtris)
+- [viteris @ victornils](https://www.victornils.net/tetris/)
+
+- [terminal-tetris @ github](https://github.com/ContentsViewer/terminal-tetris)
+- [terminal-tetris @ pypi](https://pypi.org/project/terminal-tetris/)
