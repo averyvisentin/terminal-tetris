@@ -12,3 +12,5 @@ TerminalTetris.desktop
 Terminal-tetris.desktop
 
 /.flatpak-builder/
+
+/src/terminal_tetris/tetris.db
