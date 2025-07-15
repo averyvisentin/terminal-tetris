@@ -418,40 +418,40 @@ def draw_ui(term, game):
         if content: print(term.move_xy(x + 2, y + 2) + str(content))
 
     if game.gamemode == "sprint":
-        draw_box(0, 2, 20, 4, "TIME", f"{format_time(game.elapsed_time)}")
+        draw_box(0, 2, 12, 4, "TIME", f"{format_time(game.elapsed_time)}")
         lines_text = f"{min(game.lines_cleared, 40)}/40"
-        draw_box(0, 12, 20, 4, "LINES", lines_text)
+        draw_box(0, 12, 12, 4, "LINES", lines_text)
     elif game.gamemode == "timed":
         time_left = max(0, SETTINGS['TIMED_MODE_DURATION_S'] - game.elapsed_time)
-        draw_box(0, 2, 20, 4, "TIME LEFT", f"{format_time(time_left)}")
-        draw_box(0, 7, 20, 4, "SCORE", f"{game.score}")
-        draw_box(0, 12, 20, 4, "LINES", f"{game.lines_cleared}")
+        draw_box(0, 2, 12, 4, "TIME LEFT", f"{format_time(time_left)}")
+        draw_box(0, 7, 12, 4, "SCORE", f"{game.score}")
+        draw_box(0, 12, 12, 4, "LINES", f"{game.lines_cleared}")
     elif game.gamemode == "garbage":
-        draw_box(0, 2, 20, 4, "TIME", f"{format_time(game.elapsed_time)}")
-        draw_box(0, 7, 20, 4, "SCORE", f"{game.score}")
-        draw_box(0, 12, 20, 4, "LINES", f"{game.lines_cleared}")
+        draw_box(0, 2, 12, 4, "TIME", f"{format_time(game.elapsed_time)}")
+        draw_box(0, 7, 12, 4, "SCORE", f"{game.score}")
+        draw_box(0, 12, 12, 4, "LINES", f"{game.lines_cleared}")
     else: # Standard mode
-        draw_box(0, 2, 20, 4, "SCORE", f"{game.score}")
-        draw_box(0, 12, 20, 4, "LINES", f"{game.lines_cleared}")
+        draw_box(0, 2, 12, 4, "SCORE", f"{game.score}")
+        draw_box(0, 12, 10, 4, "LINES", f"{game.lines_cleared}")
 
     if game.gamemode not in ['timed', 'garbage']:
-        draw_box(0, 7, 20, 4, "LEVEL", f"{game.level}")
+        draw_box(0, 7, 10, 4, "LEVEL", f"{game.level}")
 
     next_box_x = SETTINGS['PLAYFIELD_X_OFFSET'] + SETTINGS['BOARD_WIDTH'] * 2 + 5
     next_box_y = SETTINGS['PLAYFIELD_Y_OFFSET']
-    draw_box(next_box_x, next_box_y, 16, 22, "NEXT")
+    draw_box(next_box_x, next_box_y, 10, 22, "NEXT")
     for i, shape_name in enumerate(game.upcoming_pieces):
         if i >= 4: break
         display_piece = Piece(shape_name)
         display_piece.x = 0; display_piece.y = 0
-        draw_piece(term, display_piece, offset=(next_box_x + 4, next_box_y + 2 + (i * 5)))
+        draw_piece(term, display_piece, offset=(next_box_x + 0, next_box_y + 2 + (i * 5)))
 
     hold_box_x, hold_box_y = next_box_x, next_box_y + 23
-    draw_box(hold_box_x, hold_box_y, 16, 7, "HOLD")
+    draw_box(hold_box_x, hold_box_y, 10, 7, "HOLD")
     if game.hold_piece:
         hold_piece_display = Piece(game.hold_piece.shape_name)
         hold_piece_display.x = 0; hold_piece_display.y = 0
-        draw_piece(term, hold_piece_display, offset=(hold_box_x + 4, hold_box_y + 2))
+        draw_piece(term, hold_piece_display, offset=(hold_box_x + 0, hold_box_y + 2))
 
     controls_y = hold_box_y + 8
     print(term.move_xy(hold_box_x, controls_y) + term.bold("Controls:"))
@@ -723,7 +723,7 @@ def get_default_settings() -> dict:
     """Returns a dictionary containing all default game settings."""
     return {
         # Board and UI
-        "BOARD_WIDTH": 10, "BOARD_HEIGHT": 22, "PLAYFIELD_X_OFFSET": 25, "PLAYFIELD_Y_OFFSET": 2,
+        "BOARD_WIDTH": 10, "BOARD_HEIGHT": 22, "PLAYFIELD_X_OFFSET": 15, "PLAYFIELD_Y_OFFSET": 2,
         # High Scores
         "MAX_SCORES": 5, "MAX_NAME_LENGTH": 3,
         # Timing
