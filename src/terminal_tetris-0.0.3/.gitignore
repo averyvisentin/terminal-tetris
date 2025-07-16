@@ -1,0 +1,14 @@
+# Build and distribution artifacts
+/dist/
+# Virtual Environment
+/.venv/
+
+/io.github.averyvisentin.TerminalTetris.yml
+
+/terminal-tetris.sh
+
+TerminalTetris.desktop
+
+Terminal-tetris.desktop
+
+/.flatpak-builder/
