@@ -1,44 +1,35 @@
 app-id: io.github.averyvisentin.TerminalTetris
 runtime: org.freedesktop.Platform
-runtime-version: '23.08'
+runtime-version: "23.08"
 sdk: org.freedesktop.Sdk
 command: terminal-tetris
-build-options:
-  env:
-    PYTHONPATH: /app/lib/python3.11/site-packages
-
+finish-args:
+  # Grant access to the X11 and Wayland display servers
+  - --share=ipc
+  - --socket=x11
+  - --socket=wayland
+  # Persist user data
+  - --persist=.local/share/terminal-tetris
 modules:
-  - name: terminal-tetris
-    buildsystem: pip
-    # This post-install script runs *after* pip installs your package.
-    # It creates the launcher and installs the required metadata.
-    post-install:
-      # Create the executable launcher script in /app/bin/
-      - install -Dm755 /dev/stdin /app/bin/terminal-tetris << 'EOF'
-      #!/bin/sh
-      # This command correctly runs your installed Python module
-      python3 -m terminal_tetris.main
-      EOF
-
-      # Install the standard desktop and icon files
-      - install -Dm644 io.github.averyvisentin.TerminalTetris.desktop /app/share/applications/io.github.averyvisentin.TerminalTetris.desktop
-      - install -Dm644 io.github.averyvisentin.TerminalTetris.png /app/share/icons/hicolor/64x64/apps/io.github.averyvisentin.TerminalTetris.png
-      - install -Dm644 io.github.averyvisentin.TerminalTetris.metainfo.xml /app/share/metainfo/io.github.averyvisentin.TerminalTetris.metainfo.xml
-
-    # This is the crucial missing piece.
-    # This 'sources' block tells the 'pip' buildsystem what to build.
+  - name: python3-blessed
+    buildsystem: simple
+    build-commands:
+      - pip3 install --prefix=/app --no-deps blessed==1.20.0
     sources:
-      # First, specify the Python package to install from PyPI.
-      # The builder will download this and its dependencies (blessed).
-      - type: pypi
-        name: terminal-tetris
-        # Use the exact version you published
-        version: '==0.0.3'
+      - type: file
+        url: https://files.pythonhosted.org/packages/b8/a3/c0598816b38c280965934a3994e6593e10741634f593e92d887a40b38c4b/blessed-1.20.0-py3-none-any.whl
+        sha256: 8522caf3ac76901e1507f3545b63b276707f59422a5a589252c8b7c3d22a578a
 
-       Second, provide the local metadata files for the post-install commands.
-      - type: file
-        path: io.github.averyvisentin.TerminalTetris.desktop
-      - type: file
-        path: io.github.averyvisentin.TerminalTetris.png
-      - type: file
-        path: io.github.averyvisentin.TerminalTetris.metainfo.xml
+  - name: terminal-tetris
+    buildsystem: simple
+    build-commands:
+      # Install the application using pip
+      - pip3 install --prefix=/app --no-deps .
+      # Install the .desktop file
+      - install -Dm644 io.github.averyvisentin.TerminalTetris.desktop /app/share/applications/io.github.averyvisentin.TerminalTetris.desktop
+      # Install the appstream metadata
+      - install -Dm644 io.github.averyvisentin.TerminalTetris.appdata.xml /app/share/metainfo/io.github.averyvisentin.TerminalTetris.appdata.xml
+    sources:
+      # Your application source code
+      - type: dir
+        path: .

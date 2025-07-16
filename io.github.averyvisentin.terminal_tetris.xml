@@ -1,27 +1,50 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<component type="console-application">
-    <id>io.github.averyvisentin.terminal_tetris</id>
+<component type="desktop-application">
+  <id>io.github.averyvisentin.TerminalTetris</id>
 
-    <name>Terminal Tetris</name>
-    <summary>A fully-featured Tetris implementation for the terminal.</summary>
+  <name>Terminal Tetris</name>
+  <summary>A feature-rich terminal-based Tetris game written in Python.</summary>
 
-    <metadata_license>MIT</metadata_license>
-    <project_license>MIT</project_license>
+  <metadata_license>MIT</metadata_license>
+  <project_license>MIT</project_license>
 
-    <description>
-        <p>
-            This is a terminal-based Tetris game written in Python. It aims to be a feature-rich implementation of the classic game with modern mechanics.
-        </p>
-    </description>
+  <description>
+    <p>
+      This is a terminal-based Tetris game written in Python. It aims to be a feature-rich implementation of the classic game with modern mechanics.
+    </p>
+    <ul>
+      <li>Classic Tetris Gameplay</li>
+      <li>Multiple Gamemodes: Marathon, Sprint, and Timed</li>
+      <li>Modern Mechanics: T-Spin detection and a back-to-back bonus system</li>
+      <li>Save State Feature</li>
+      <li>Hold Functionality</li>
+      <li>Persistent High Scores and Settings</li>
+      <li>Customizable Controls and Gameplay</li>
+    </ul>
+  </description>
 
-    <icon type="stock">terminaltetris</icon>
+  <screenshots>
+    <screenshot type="default">
+      <caption>Game in progress</caption>
+      <image>https://raw.githubusercontent.com/averyvisentin/terminal-tetris/main/screenshots/game.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Main Menu</caption>
+      <image>https://raw.githubusercontent.com/averyvisentin/terminal-tetris/main/screenshots/main-menu.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings</caption>
+      <image>https://raw.githubusercontent.com/averyvisentin/terminal-tetris/main/screenshots/settings.png</image>
+    </screenshot>
+  </screenshots>
 
-    <categories>
-        <category>Game</category>
-        <category>BlocksGame</category>
-    </categories>
+  <url type="homepage">https://github.com/averyvisentin/terminal-tetris</url>
+  <url type="bugtracker">https://github.com/averyvisentin/terminal-tetris/issues</url>
 
-    <provides>
-        <binary>terminal-tetris</binary>
-    </provides>
+  <content_rating type="oars-1.1" />
+
+  <releases>
+    <release version="0.0.3" date="2023-10-27" />
+  </releases>
+
 </component>
