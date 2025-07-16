@@ -1,0 +1,44 @@
+app-id: io.github.averyvisentin.TerminalTetris
+runtime: org.freedesktop.Platform
+runtime-version: '23.08'
+sdk: org.freedesktop.Sdk
+command: terminal-tetris
+build-options:
+  env:
+    PYTHONPATH: /app/lib/python3.11/site-packages
+
+modules:
+  - name: terminal-tetris
+    buildsystem: pip
+    # This post-install script runs *after* pip installs your package.
+    # It creates the launcher and installs the required metadata.
+    post-install:
+      # Create the executable launcher script in /app/bin/
+      - install -Dm755 /dev/stdin /app/bin/terminal-tetris << 'EOF'
+      #!/bin/sh
+      # This command correctly runs your installed Python module
+      python3 -m terminal_tetris.main
+      EOF
+
+      # Install the standard desktop and icon files
+      - install -Dm644 io.github.averyvisentin.TerminalTetris.desktop /app/share/applications/io.github.averyvisentin.TerminalTetris.desktop
+      - install -Dm644 io.github.averyvisentin.TerminalTetris.png /app/share/icons/hicolor/64x64/apps/io.github.averyvisentin.TerminalTetris.png
+      - install -Dm644 io.github.averyvisentin.TerminalTetris.metainfo.xml /app/share/metainfo/io.github.averyvisentin.TerminalTetris.metainfo.xml
+
+    # This is the crucial missing piece.
+    # This 'sources' block tells the 'pip' buildsystem what to build.
+    sources:
+      # First, specify the Python package to install from PyPI.
+      # The builder will download this and its dependencies (blessed).
+      - type: pypi
+        name: terminal-tetris
+        # Use the exact version you published
+        version: '==0.0.3'
+
+       Second, provide the local metadata files for the post-install commands.
+      - type: file
+        path: io.github.averyvisentin.TerminalTetris.desktop
+      - type: file
+        path: io.github.averyvisentin.TerminalTetris.png
+      - type: file
+        path: io.github.averyvisentin.TerminalTetris.metainfo.xml

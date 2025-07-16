@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="console-application">
+    <id>io.github.averyvisentin.terminal_tetris</id>
+
+    <name>Terminal Tetris</name>
+    <summary>A fully-featured Tetris implementation for the terminal.</summary>
+
+    <metadata_license>MIT</metadata_license>
+    <project_license>MIT</project_license>
+
+    <description>
+        <p>
+            This is a terminal-based Tetris game written in Python. It aims to be a feature-rich implementation of the classic game with modern mechanics.
+        </p>
+    </description>
+
+    <icon type="stock">terminaltetris</icon>
+
+    <categories>
+        <category>Game</category>
+        <category>BlocksGame</category>
+    </categories>
+
+    <provides>
+        <binary>terminal-tetris</binary>
+    </provides>
+</component>
