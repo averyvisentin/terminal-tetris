@@ -1,0 +1,9 @@
+An unexpected error occurred: attempt to write a readonly database
+Traceback (most recent call last):
+  File "/usr/lib/python3.13/site-packages/terminal_tetris/main.py", line 975, in main
+    delete_save_state()
+    ~~~~~~~~~~~~~~~~~^^
+  File "/usr/lib/python3.13/site-packages/terminal_tetris/main.py", line 531, in delete_save_state
+    cursor.execute("DELETE FROM saved_game WHERE id = 1")
+    ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+sqlite3.OperationalError: attempt to write a readonly database
