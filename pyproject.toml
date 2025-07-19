@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "terminal-tetris"
-version = "0.0.3"
+version = "0.0.5"
 authors = [{ name = "Avery Visentin", email = "averyvisentin@gmail.com" }]
 description = "A feature-rich terminal-based Tetris game written in Python."
 readme = "README.md"
