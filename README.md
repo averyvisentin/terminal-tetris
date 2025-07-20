@@ -29,11 +29,16 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
 
 ### Installation
 
-1.  Install with pip or whatver you use:
+Install with pip or whatver you use:
     ```bash
     pip install terminal-tetris
     ```
+We're [NOW ON THE AUR](https://aur.archlinux.org/packages/terminal-tetris)
 
+Install with your favourite thing using
+    ```bash
+    yay -S terminal-tetris
+    ```
 
 ### Running the Game
 
@@ -43,9 +48,9 @@ You can run the game using the following command:
 terminal-tetris
 ```
 
-
 -----
-
+![screenshot](./screenshots/garbage.png)
+-----
 ## Controls
 
 | Key         | Action        |
@@ -81,9 +86,13 @@ The scoring system is based on modern Tetris guidelines, with the base score mul
 | T-Spin Double       | 1200      |
 | T-Spin Triple       | 1600      |
 | Back-to-Back Bonus  | 1.5x      |
-![sceenshot](./screenshots/new-score.png)
+
+
 -----
 
+![screenshot](./screenshots/new-score.png)
+
+-----
 ## High Scores
 
 The game keeps track of the top 5 high scores in a `tetris.db` file. If you achieve a high score, you will be prompted to enter a three-character name.
