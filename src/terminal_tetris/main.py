@@ -21,8 +21,8 @@ from typing import List, Tuple, Optional, Any, Callable
 from blessed import Terminal
 
 # --- Game Configuration & Constants ---
-script_dir = os.path.dirname(os.path.abspath(__file__)) # Get the absolute path of the directory containing this script.
-DATABASE_FILE = os.path.join(script_dir, 'tetris.db') # Define the database file path to be in the same directory as the script.
+DB_DIR = os.path.expanduser('~/Games/terminal-tetris') # adding this because the current path was not permissed to the game script and I wanted to store the database in a more accessible location. Easier than permissing
+DATABASE_FILE = os.path.join(DB_DIR, 'tetris.db') # Define the database file path to be in the user's Games directory.
 SETTINGS = {} # This global dictionary will be populated by load_settings() from the database.
 
 # Tetromino shapes and their colors are fundamental and remain hardcoded.
@@ -44,6 +44,7 @@ GARBAGE_BLOCK_TYPE = 'G'
 
 def initialize_database():
     """Creates the database and tables if they don't exist."""
+    os.makedirs(os.path.dirname(DATABASE_FILE), exist_ok=True) #Im so dumb
     with sqlite3.connect(DATABASE_FILE) as conn:
         cursor = conn.cursor()
         cursor.execute('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL)')
@@ -414,7 +415,7 @@ def draw_ui(term, game):
         padding = ' ' * padding_size
         print(term.move_xy(x, y + 1) + f"║ {title}{padding}║")
         for i in range(2, h - 1): print(term.move_xy(x, y + i) + f"║{' '*(w-2)}║")
-        print(term.move_xy(x, y + h -1) + f"╚{'═'*(w-2)}╝")
+        print(term.move_xy(x, y + h - 1) + f"╚{'═'*(w-2)}╝")
         if content: print(term.move_xy(x + 2, y + 2) + str(content))
 
     if game.gamemode == "sprint":
@@ -453,10 +454,23 @@ def draw_ui(term, game):
         hold_piece_display.x = 0; hold_piece_display.y = 0
         draw_piece(term, hold_piece_display, offset=(hold_box_x + 0, hold_box_y + 2))
 
-    controls_y = hold_box_y + 8
-    print(term.move_xy(hold_box_x, controls_y) + term.bold("Controls:"))
-    controls = {"Move": f"{get_key_display_name(SETTINGS['Key: Left'])}/{get_key_display_name(SETTINGS['Key: Right'])}", "Rotate": get_key_display_name(SETTINGS['Key: Rotate']), "Soft Drop": get_key_display_name(SETTINGS['Key: Soft Drop']), "Hard Drop": get_key_display_name(SETTINGS['Key: Hard Drop']), "Hold": get_key_display_name(SETTINGS['Key: Hold']), "Pause": "P", "Save (Paused)": "S", "Quit": "Q"}
-    for i, (action, key) in enumerate(controls.items()): print(term.move_xy(hold_box_x, controls_y + 1 + i) + f"{key:<10}: {action}")
+    controls_y = SETTINGS['PLAYFIELD_Y_OFFSET'] + SETTINGS['BOARD_HEIGHT'] + 2
+    controls_x = 2
+
+    controls_text = [
+        f"{term.bold}Controls:",
+        f"{get_key_display_name(SETTINGS['Key: Left'])}/{get_key_display_name(SETTINGS['Key: Right'])} : Move",
+        f"{get_key_display_name(SETTINGS['Key: Rotate'])}       : Rotate",
+        f"{get_key_display_name(SETTINGS['Key: Soft Drop'])}     : Soft Drop",
+        f"{get_key_display_name(SETTINGS['Key: Hard Drop'])}   : Hard Drop",
+        f"{get_key_display_name(SETTINGS['Key: Hold'])}       : Hold",
+        "P         : Pause",
+        "S         : Save (Paused)",
+        "Q         : Quit"
+    ]
+
+    for i, line in enumerate(controls_text):
+        print(term.move_xy(controls_x, controls_y + i) + line)
 
 def draw_game_state(term, game):
     print(term.home + term.clear_eos, end='')

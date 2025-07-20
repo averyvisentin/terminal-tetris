@@ -1,7 +1,4 @@
-# Build and distribution artifacts
-/dist/
-# Virtual Environment
-/.venv/
+
 
 /io.github.averyvisentin.TerminalTetris.yml
 
@@ -13,6 +10,20 @@ Terminal-tetris.desktop
 
 /.flatpak-builder/
 
-/src/terminal_tetris/tetris.db
+
 
 /pkg/python-terminal-tetris/usr/lib/python3.13/site-packages/terminal_tetris/tetris.db
+
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+
+dist/
+build/
+*.egg-info/
