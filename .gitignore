@@ -10,7 +10,8 @@ Terminal-tetris.desktop
 
 /.flatpak-builder/
 
-
+io.github.averyvisentin.TerminalTetris.appdata.xml
+io.github.averyvisentin.TerminalTetris.desktop
 
 /pkg/python-terminal-tetris/usr/lib/python3.13/site-packages/terminal_tetris/tetris.db
 
@@ -27,3 +28,5 @@ venv/
 dist/
 build/
 *.egg-info/
+
+uv.lock
