@@ -457,7 +457,7 @@ def draw_ui(term, game):
     controls_y = SETTINGS['PLAYFIELD_Y_OFFSET'] + SETTINGS['BOARD_HEIGHT'] + 2
     controls_x = 2
 
-    controls_text = [(
+    controls_text = [
         f"{term.bold}Controls:",
         f"{get_key_display_name(SETTINGS['Key: Left'])}/{get_key_display_name(SETTINGS['Key: Right'])} : Move",
         f"{get_key_display_name(SETTINGS['Key: Rotate'])}       : Rotate",
@@ -467,7 +467,7 @@ def draw_ui(term, game):
         "P         : Pause",
         "S         : Save (Paused)",
         "Q         : Quit"
-    )]
+    ]
 
     for i, line in enumerate(controls_text):
         print(term.move_xy(controls_x, controls_y + i) + line)
@@ -767,33 +767,48 @@ def show_main_menu(term):
         menu_options.insert(0, "Resume")
 
     selected_index = 0
+
+    redraw_background = True
+
     while True:
-        print(term.home + term.clear)
-        # --- Frame drawing logic ---
-        box_x = 1
-        box_y = 0
-        box_w = term.width - 2
-        box_h = term.height - 1
+        if redraw_background:
+            print(term.home + term.clear)
 
-        # 1. Draw only the top and bottom borders first.
-        print(term.move_xy(box_x, box_y) + f"╔{'═'*(box_w-2)}╗")
-        print(term.move_xy(box_x, box_y + box_h - 1) + f"╚{'═'*(box_w-2)}╝")
+            # Define and draw the static parts of the frame.
+            box_x = 1
+            box_y = 0
+            box_w = term.width - 2
+            box_h = term.height - 1
+            # MODIFIED: Using double-line box characters.
+            print(term.move_xy(box_x, box_y) + f"╔{'═'*(box_w-2)}╗")
+            print(term.move_xy(box_x, box_y + box_h - 1) + f"╚{'═'*(box_w-2)}╝")
 
-        # 2. Draw all the text content.
-        print(term.move_y(2) + term.center(term.bold("Terminal Tetris")))
+            # Draw static text content.
+            print(term.move_y(2) + term.center(term.bold("Terminal Tetris")))
 
-        standard_scores = load_high_scores('highscores', 'score, name', 'score DESC')
-        scores_height = _display_high_scores_list(term, 3, "Top Marathon Scores", standard_scores, lambda vals: str(vals[0]))
+            standard_scores = load_high_scores('highscores', 'score, name', 'score DESC')
+            scores_height = _display_high_scores_list(term, 3, "Top Marathon Scores", standard_scores, lambda vals: str(vals[0]))
 
-        sprint_scores = load_high_scores('sprint_highscores', 'time, name', 'time ASC')
-        sprint_scores_height = _display_high_scores_list(term, 3 + scores_height + 1, "Top Sprint Times", sprint_scores, lambda vals: format_time(vals[0]))
+            sprint_scores = load_high_scores('sprint_highscores', 'time, name', 'time ASC')
+            sprint_scores_height = _display_high_scores_list(term, 3 + scores_height + 1, "Top Sprint Times", sprint_scores, lambda vals: format_time(vals[0]))
 
-        timed_scores = load_high_scores('timed_highscores', 'score, lines, name', 'score DESC, lines DESC')
-        timed_scores_height = _display_high_scores_list(term, 3 + scores_height + sprint_scores_height + 2, "Top Timed Scores", timed_scores, lambda vals: f"{vals[0]} ({vals[1]}L)")
+            timed_scores = load_high_scores('timed_highscores', 'score, lines, name', 'score DESC, lines DESC')
+            timed_scores_height = _display_high_scores_list(term, 3 + scores_height + sprint_scores_height + 2, "Top Timed Scores", timed_scores, lambda vals: f"{vals[0]} ({vals[1]}L)")
 
-        garbage_scores = load_high_scores('garbage_highscores', 'time, name', 'time DESC')
-        garbage_scores_height = _display_high_scores_list(term, 3 + scores_height + sprint_scores_height + timed_scores_height + 3, "Top Garbage Times", garbage_scores, lambda vals: format_time(vals[0]))
+            garbage_scores = load_high_scores('garbage_highscores', 'time, name', 'time DESC')
+            garbage_scores_height = _display_high_scores_list(term, 3 + scores_height + sprint_scores_height + timed_scores_height + 3, "Top Garbage Times", garbage_scores, lambda vals: format_time(vals[0]))
 
+            prompt_y = term.height - 5
+            print(term.move_y(prompt_y) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."))
+            print(term.move_y(prompt_y + 1) + term.center("Press SPACE or ENTER to Select. 'q' to Quit."))
+
+            redraw_background = False
+
+        # This part (dynamic content) runs every time to update the selection.
+        scores_height = len(load_high_scores('highscores', 'score, name', 'score DESC')) + 2
+        sprint_scores_height = len(load_high_scores('sprint_highscores', 'time, name', 'time ASC')) + 2
+        timed_scores_height = len(load_high_scores('timed_highscores', 'score, lines, name', 'score DESC, lines DESC')) + 2
+        garbage_scores_height = len(load_high_scores('garbage_highscores', 'time, name', 'time DESC')) + 2
         menu_y = 3 + scores_height + sprint_scores_height + timed_scores_height + garbage_scores_height + 4
 
         for i, option in enumerate(menu_options):
@@ -803,37 +818,54 @@ def show_main_menu(term):
             else:
                 print(term.move_y(menu_y + i) + term.center(line))
 
+        level_line_y = menu_y + len(menu_options) + 1
+        print(term.move_y(level_line_y) + term.center(' ' * 30))
+
         current_selection = menu_options[selected_index]
         if current_selection in ["Marathon", "Sprint", "Timed", "Garbage"]:
             level_map = {"Marathon": selected_level, "Sprint": sprint_selected_level, "Timed": timed_selected_level, "Garbage": garbage_selected_level}
-            print(term.move_y(menu_y + len(menu_options) + 1) + term.center(f"< Starting Level {level_map[current_selection]} >"))
+            print(term.move_y(level_line_y) + term.center(f"< Starting Level {level_map[current_selection]} >"))
 
-        prompt_y = term.height - 5
-        print(term.move_y(prompt_y) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."))
-        print(term.move_y(prompt_y + 1) + term.center("Press SPACE or ENTER to Select. 'q' to Quit."))
-
-        # 3. NOW, draw the side borders on top of the content.
+        # MODIFIED: The side borders are now drawn last to prevent being overwritten.
+        box_x = 1
+        box_y = 0
+        box_w = term.width - 2
+        box_h = term.height - 1
         for i in range(box_h - 2):
+            # Using double-line box character
             print(term.move_xy(box_x, box_y + 1 + i) + "║")
             print(term.move_xy(box_x + box_w - 1, box_y + 1 + i) + "║")
-        # --- End of frame logic ---
 
         key = term.inkey()
-        if key.code == term.KEY_UP:
-            selected_index = (selected_index - 1) % len(menu_options)
-        elif key.code == term.KEY_DOWN:
-            selected_index = (selected_index + 1) % len(menu_options)
-        elif key.code == term.KEY_LEFT:
-            if current_selection == "Marathon": selected_level = max(SETTINGS['MIN_LEVEL'], selected_level - 1)
-            elif current_selection == "Sprint": sprint_selected_level = max(SETTINGS['MIN_LEVEL'], sprint_selected_level - 1)
-            elif current_selection == "Timed": timed_selected_level = max(SETTINGS['MIN_LEVEL'], timed_selected_level - 1)
-            elif current_selection == "Garbage": garbage_selected_level = max(SETTINGS['MIN_LEVEL'], garbage_selected_level - 1)
-        elif key.code == term.KEY_RIGHT:
-            if current_selection == "Marathon": selected_level = min(SETTINGS['MAX_LEVEL'], selected_level + 1)
-            elif current_selection == "Sprint": sprint_selected_level = min(SETTINGS['MAX_LEVEL'], sprint_selected_level + 1)
-            elif current_selection == "Timed": timed_selected_level = min(SETTINGS['MAX_LEVEL'], timed_selected_level + 1)
-            elif current_selection == "Garbage": garbage_selected_level = min(SETTINGS['MAX_LEVEL'], garbage_selected_level + 1)
-        elif key.code == term.KEY_ENTER or key == ' ':
+
+        if key.is_sequence:
+            if key.code == term.KEY_UP:
+                selected_index = (selected_index - 1) % len(menu_options)
+            elif key.code == term.KEY_DOWN:
+                selected_index = (selected_index + 1) % len(menu_options)
+            elif key.code == term.KEY_LEFT:
+                if current_selection == "Marathon": selected_level = max(SETTINGS['MIN_LEVEL'], selected_level - 1)
+                elif current_selection == "Sprint": sprint_selected_level = max(SETTINGS['MIN_LEVEL'], sprint_selected_level - 1)
+                elif current_selection == "Timed": timed_selected_level = max(SETTINGS['MIN_LEVEL'], timed_selected_level - 1)
+                elif current_selection == "Garbage": garbage_selected_level = max(SETTINGS['MIN_LEVEL'], garbage_selected_level - 1)
+            elif key.code == term.KEY_RIGHT:
+                if current_selection == "Marathon": selected_level = min(SETTINGS['MAX_LEVEL'], selected_level + 1)
+                elif current_selection == "Sprint": sprint_selected_level = min(SETTINGS['MAX_LEVEL'], sprint_selected_level + 1)
+                elif current_selection == "Timed": timed_selected_level = min(SETTINGS['MAX_LEVEL'], timed_selected_level + 1)
+                elif current_selection == "Garbage": garbage_selected_level = min(SETTINGS['MAX_LEVEL'], garbage_selected_level + 1)
+            elif key.code == term.KEY_ENTER:
+                selection = menu_options[selected_index]
+                if selection == "Resume": return "RESUME", None
+                elif selection == "Marathon": return "standard", selected_level
+                elif selection == "Sprint": return "sprint", sprint_selected_level
+                elif selection == "Timed": return "timed", timed_selected_level
+                elif selection == "Garbage": return "garbage", garbage_selected_level
+                elif selection == "Settings":
+                    show_settings(term)
+                    redraw_background = True
+                    continue
+                elif selection == "Quit": return None, None
+        elif key == ' ':
             selection = menu_options[selected_index]
             if selection == "Resume": return "RESUME", None
             elif selection == "Marathon": return "standard", selected_level
@@ -842,6 +874,7 @@ def show_main_menu(term):
             elif selection == "Garbage": return "garbage", garbage_selected_level
             elif selection == "Settings":
                 show_settings(term)
+                redraw_background = True
                 continue
             elif selection == "Quit": return None, None
         elif key.lower() == 'q':
