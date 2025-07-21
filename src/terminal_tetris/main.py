@@ -20,7 +20,7 @@ import json # Added for handling complex settings
 from typing import List, Tuple, Optional, Any, Callable
 from blessed import Terminal
 
-# --- Game Configuration & Constants ---
+"""--- Game Configuration & Constants ---"""
 DB_DIR = os.path.expanduser('~/Games/terminal-tetris') # adding this because the current path was not permissed to the game script and I wanted to store the database in a more accessible location. Easier than permissing
 DATABASE_FILE = os.path.join(DB_DIR, 'tetris.db') # Define the database file path to be in the user's Games directory.
 SETTINGS = {} # This global dictionary will be populated by load_settings() from the database.
@@ -40,7 +40,7 @@ BLOCK_CHAR = '██'
 GHOST_CHAR = '▒▒'
 GARBAGE_BLOCK_TYPE = 'G'
 
-# --- Database & Settings Management ---
+"""--- Database & Settings Management ---"""
 
 def initialize_database():
     """Creates the database and tables if they don't exist."""
@@ -457,7 +457,7 @@ def draw_ui(term, game):
     controls_y = SETTINGS['PLAYFIELD_Y_OFFSET'] + SETTINGS['BOARD_HEIGHT'] + 2
     controls_x = 2
 
-    controls_text = [
+    controls_text = [(
         f"{term.bold}Controls:",
         f"{get_key_display_name(SETTINGS['Key: Left'])}/{get_key_display_name(SETTINGS['Key: Right'])} : Move",
         f"{get_key_display_name(SETTINGS['Key: Rotate'])}       : Rotate",
@@ -467,7 +467,7 @@ def draw_ui(term, game):
         "P         : Pause",
         "S         : Save (Paused)",
         "Q         : Quit"
-    ]
+    )]
 
     for i, line in enumerate(controls_text):
         print(term.move_xy(controls_x, controls_y + i) + line)
@@ -629,9 +629,10 @@ def handle_game_over(term, game):
             print(term.move_y(term.height // 2 - 8) + term.center(term.bold(result_msg)))
             print(term.center(f"Final Time: {format_time(game.elapsed_time)}"))
             _display_high_scores_list(term, term.height // 2 - 4, "Top Sprint Times", scores_to_show, lambda vals: format_time(vals[0]))
-            print(term.move_y(term.height - 3) + term.center("Press 'SPACE' for Main Menu or 'q' to Quit"))
+            print(term.move_y(term.height - 3) + term.center("Press 'SPACE' or 'ENTER' for Main Menu or 'q' to Quit"))
             key = term.inkey()
             if key.lower() == ' ': return True
+            elif key.lower() == 'ENTER': return True    #my finger is always on enter at the end of the game so I added this
             elif key.lower() == 'q': return False
         return
 
@@ -674,7 +675,7 @@ def handle_game_over(term, game):
         if is_high_score and game.elapsed_time > 0:
             while True:
                 print(term.home + term.clear)
-                print(term.center(term.bold("🎉 NEW SURVIVAL RECORD! 🎉")))
+                print(term.center(term.bold("🎉 NEW GARBAGE RECORD! 🎉")))
                 print(term.center(f"You Survived For: {format_time(game.elapsed_time)}"))
                 print(term.center(f"Enter your name ({SETTINGS['MAX_NAME_LENGTH']} chars):"))
                 input_box = f" {player_name.ljust(SETTINGS['MAX_NAME_LENGTH'], '_')} "
@@ -691,7 +692,7 @@ def handle_game_over(term, game):
             scores_to_show = load_high_scores(table='garbage_highscores', select_cols='time, name', order_by_clause='time DESC')
             print(term.move_y(term.height // 2 - 8) + term.center(term.bold("GAME OVER")))
             print(term.center(f"Final Time: {format_time(game.elapsed_time)}"))
-            _display_high_scores_list(term, term.height // 2 - 4, "Top Survival Times", scores_to_show, lambda vals: format_time(vals[0]))
+            _display_high_scores_list(term, term.height // 2 - 4, "Top Garbage Times", scores_to_show, lambda vals: format_time(vals[0]))
             print(term.move_y(term.height - 3) + term.center("Press 'SPACE' for Main Menu or 'q' to Quit"))
             key = term.inkey()
             if key.lower() == ' ': return True
@@ -768,7 +769,18 @@ def show_main_menu(term):
     selected_index = 0
     while True:
         print(term.home + term.clear)
-        print(term.move_y(1) + term.center(term.bold("Terminal Tetris")))
+        # --- Frame drawing logic ---
+        box_x = 1
+        box_y = 0
+        box_w = term.width - 2
+        box_h = term.height - 1
+
+        # 1. Draw only the top and bottom borders first.
+        print(term.move_xy(box_x, box_y) + f"╔{'═'*(box_w-2)}╗")
+        print(term.move_xy(box_x, box_y + box_h - 1) + f"╚{'═'*(box_w-2)}╝")
+
+        # 2. Draw all the text content.
+        print(term.move_y(2) + term.center(term.bold("Terminal Tetris")))
 
         standard_scores = load_high_scores('highscores', 'score, name', 'score DESC')
         scores_height = _display_high_scores_list(term, 3, "Top Marathon Scores", standard_scores, lambda vals: str(vals[0]))
@@ -780,7 +792,7 @@ def show_main_menu(term):
         timed_scores_height = _display_high_scores_list(term, 3 + scores_height + sprint_scores_height + 2, "Top Timed Scores", timed_scores, lambda vals: f"{vals[0]} ({vals[1]}L)")
 
         garbage_scores = load_high_scores('garbage_highscores', 'time, name', 'time DESC')
-        garbage_scores_height = _display_high_scores_list(term, 3 + scores_height + sprint_scores_height + timed_scores_height + 3, "Top Survival Times", garbage_scores, lambda vals: format_time(vals[0]))
+        garbage_scores_height = _display_high_scores_list(term, 3 + scores_height + sprint_scores_height + timed_scores_height + 3, "Top Garbage Times", garbage_scores, lambda vals: format_time(vals[0]))
 
         menu_y = 3 + scores_height + sprint_scores_height + timed_scores_height + garbage_scores_height + 4
 
@@ -793,12 +805,18 @@ def show_main_menu(term):
 
         current_selection = menu_options[selected_index]
         if current_selection in ["Marathon", "Sprint", "Timed", "Garbage"]:
-             level_map = {"Marathon": selected_level, "Sprint": sprint_selected_level, "Timed": timed_selected_level, "Garbage": garbage_selected_level}
-             print(term.move_y(menu_y + len(menu_options) + 1) + term.center(f"< Starting Level {level_map[current_selection]} >"))
+            level_map = {"Marathon": selected_level, "Sprint": sprint_selected_level, "Timed": timed_selected_level, "Garbage": garbage_selected_level}
+            print(term.move_y(menu_y + len(menu_options) + 1) + term.center(f"< Starting Level {level_map[current_selection]} >"))
 
-        prompt_y = term.height - 3
+        prompt_y = term.height - 5
         print(term.move_y(prompt_y) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."))
         print(term.move_y(prompt_y + 1) + term.center("Press SPACE or ENTER to Select. 'q' to Quit."))
+
+        # 3. NOW, draw the side borders on top of the content.
+        for i in range(box_h - 2):
+            print(term.move_xy(box_x, box_y + 1 + i) + "║")
+            print(term.move_xy(box_x + box_w - 1, box_y + 1 + i) + "║")
+        # --- End of frame logic ---
 
         key = term.inkey()
         if key.code == term.KEY_UP:
@@ -884,6 +902,17 @@ def show_settings(term):
         """A single, reliable function to draw the entire settings menu."""
         print(term.home + term.clear, end="")
         print(term.move_y(2) + term.center(term.bold("--- Game Settings ---")), end="")
+
+        box_width = 55
+        box_height = len(setting_options) + 4  # Height is dynamic based on number of settings
+        box_x = (term.width - box_width) // 2
+        box_y = 4 # Start the box on row 4
+
+        print(term.move_xy(box_x, box_y) + f"╔{'═'*(box_width-2)}╗")
+        for i in range(box_height - 2):
+            print(term.move_xy(box_x, box_y + 1 + i) + f"║{' '*(box_width-2)}║")
+        print(term.move_xy(box_x, box_y + box_height - 1) + f"╚{'═'*(box_width-2)}╝")
+
         print(term.move_y(term.height - 5) + term.center("Use ↑/↓ to navigate. Use ←/→ to change values."), end="")
         print(term.move_y(term.height - 4) + term.center("Press ENTER to change a keybinding or edit values."), end="")
         print(term.move_y(term.height - 3) + term.center("Press 's' to Save & Exit"), end="")
@@ -902,8 +931,22 @@ def show_settings(term):
             else:
                 display_value = get_key_display_name(str(value))
 
-            line_text = f"{option_name:.<35} {display_value}"
-            final_line = term.center(term.reverse(line_text) if i == selected_idx else line_text)
+            line_text = f"{option_name:.<25} {display_value}"
+            # MODIFIED: Align all text to the left, 2 spaces inside the box.
+
+            # 1. Define the left and right boundaries inside the box.
+            start_x = box_x + 2
+            right_boundary_x = box_x + box_width - 2
+
+            # 2. Calculate the number of dots needed to fill the space.
+            space_for_dots = right_boundary_x - start_x - len(option_name) - len(display_value)
+            dots = '.' * max(0, space_for_dots)
+
+            # 3. Build the full line of text with perfect alignment.
+            line_text = f"{option_name}{dots}{display_value}"
+
+            line_to_print = term.reverse(line_text) if i == selected_idx else line_text
+            final_line = term.move_x(start_x) + line_to_print
             print(term.move_y(5 + i) + final_line, end="")
         sys.stdout.flush()
 
