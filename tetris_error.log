@@ -1,0 +1,15 @@
+An unexpected error occurred: name 'coords' is not defined
+Traceback (most recent call last):
+  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 1211, in main
+    game_loop(term, game)
+    ~~~~~~~~~^^^^^^^^^^^^
+  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 689, in game_loop
+    draw_game_state(term, game)
+    ~~~~~~~~~~~~~~~^^^^^^^^^^^^
+  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 546, in draw_game_state
+    draw_ui(term, game)
+    ~~~~~~~^^^^^^^^^^^^
+  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 504, in draw_ui
+    controls_y = coords['board_y'] + coords['board_h'] + 1
+                 ^^^^^^
+NameError: name 'coords' is not defined
