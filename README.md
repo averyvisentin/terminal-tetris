@@ -3,7 +3,7 @@
 This is a terminal-based Tetris game written in Python. It aims to be a feature-rich implementation of the classic game with modern mechanics. This project was created for personal use.
 -----
 
-![screenshot](./screenshots/game.png) ![screenshot](./screenshots/settings.png)
+![screenshot](https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/main-menu.png) ![https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/settings.png)
 -----
 
 ## Features
@@ -22,7 +22,7 @@ This is a terminal-based Tetris game written in Python. It aims to be a feature-
   * **Bag Randomization**: A 7-bag randomization system ensures that all seven tetrominoes will appear in a random order before any are repeated.
 
 -----
-![screenshot](./screenshots/main-menu.png)
+![screenshot](https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/main-menu.png)
 -----
 
 ## How to Play
@@ -49,7 +49,7 @@ terminal-tetris
 ```
 
 -----
-![screenshot](./screenshots/garbage.png)
+![screenshot](https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/garbage.png)
 -----
 ## Controls
 
@@ -66,7 +66,7 @@ terminal-tetris
 
 -----
 
-![sceenshot](./screenshots/game-paused.png)
+![sceenshot](https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/game-paused.png)
 
 -----
 
@@ -90,7 +90,7 @@ The scoring system is based on modern Tetris guidelines, with the base score mul
 
 -----
 
-![screenshot](./screenshots/new-score.png)
+![screenshot](https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/new-score.png)
 
 -----
 ## High Scores
@@ -99,7 +99,7 @@ The game keeps track of the top 5 high scores in a `tetris.db` file. If you achi
 
 -----
 
-![screenshot](./screenshots/game-over.png)
+![screenshot](https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/game-over.png)
 
 -----
 
