@@ -1,0 +1,27 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "terminal-tetris"
+version = "0.0.10"
+authors = [{ name = "Avery Visentin", email = "averyvisentin@gmail.com" }]
+description = "A feature-rich terminal-based Tetris game written in Python."
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = ["blessed"]
+
+[project.urls]
+"Homepage" = "https://github.com/averyvisentin/terminal-tetris"
+"Bug Tracker" = "https://github.com/averyvisentin/terminal-tetris/issues"
+
+[project.scripts]
+terminal-tetris = "terminal_tetris.main:main"
+
+[tool.setuptools.package-data]
+terminal_tetris = ["*.txt"]

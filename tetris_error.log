@@ -1,15 +1,9 @@
-An unexpected error occurred: name 'coords' is not defined
+An unexpected error occurred: name 'quotes' is not defined
 Traceback (most recent call last):
-  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 1211, in main
-    game_loop(term, game)
-    ~~~~~~~~~^^^^^^^^^^^^
-  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 689, in game_loop
-    draw_game_state(term, game)
-    ~~~~~~~~~~~~~~~^^^^^^^^^^^^
-  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 546, in draw_game_state
-    draw_ui(term, game)
-    ~~~~~~~^^^^^^^^^^^^
-  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 504, in draw_ui
-    controls_y = coords['board_y'] + coords['board_h'] + 1
-                 ^^^^^^
-NameError: name 'coords' is not defined
+  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 1198, in main
+    gamemode, start_level = show_main_menu(term, resize_handler)
+                            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 860, in show_main_menu
+    quotes(random_quote)
+    ^^^^^^
+NameError: name 'quotes' is not defined

@@ -1,0 +1,9 @@
+An unexpected error occurred: name 'quotes' is not defined
+Traceback (most recent call last):
+  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 1198, in main
+    gamemode, start_level = show_main_menu(term, resize_handler)
+                            ~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/avery/PROJECTS/python/terminal-tetris/src/terminal_tetris/main.py", line 860, in show_main_menu
+    quotes(random_quote)
+    ^^^^^^
+NameError: name 'quotes' is not defined

@@ -1,0 +1,67 @@
+Tetris is my init process.
+A T-spin triple is just sudo !!.
+My favorite distro is Tetri-OS.
+A mis-dropped piece is a segfault for your stack.
+cat /dev/urandom | tetris - for a real challenge.
+My PATH variable leads directly to the Tetris binary.
+I chown all the blocks to root:root.
+A line piece drought is worse than a memory leak.
+Playing Tetris is just makeing lines.
+I use dd to copy my high score to a floppy disk.
+A messy board is just a buffer overflow waiting to happen.
+I debug my Tetris game with gdb.
+My GRUB menu has a Tetris option.
+I alias gg="tetris".
+My wifi password is my Tetris high score.
+A perfect clear is like rm -rf * in an empty directory.
+I named my firstborn Linus, my second Tetris.
+My motd is just my Tetris leaderboard.
+I compile my Tetris from source, obviously.
+A soft drop is just a nice command.
+I fsck my Tetris board after every game.
+My terminal colors are themed after the Tetris blocks.
+A held piece is just a variable.
+I use rsync to back up my Tetris game saves.
+My shell prompt is a falling T-block.
+I don't dream, I just see falling blocks in tty1.
+A game over is a kernel panic.
+My uptime is measured in Tetris games played.
+sudo make me a tetris.
+A high stack is a mount point for failure.
+I rotate pieces with xrandr.
+A T-spin setup is just a clever shell script.
+I don't need a hold queue, I have git stash.
+My game is fork-bombed with Z-blocks.
+I clear lines with sed -i '/^##########$/d'.
+A game over screen is just a 404 Not Found.
+I play Tetris on ed, the standard text editor.
+A misdrop is a commit -m "oops".
+My CPU governor is set to performance for Tetris.
+I log my Tetris games to syslog.
+A back-to-back Tetris is just a pipe |.
+My .plan file is just my next Tetris move.
+I use lsof to see which process is holding the I-block.
+My desktop environment is a maximized Tetris window.
+I recompile my kernel to optimize Tetris performance.
+A line clear is echo "" > /dev/full_line.
+My favorite font is Terminus because it looks like Tetris blocks.
+A difficult level is just a high load average.
+I use watch to monitor my next piece queue.
+A perfect stack is a clean git log.
+My ~/.profile just launches Tetris.
+I use strace to find out why I'm not getting any long pieces.
+My xorg.conf is tuned for minimal input lag in Tetris.
+Game over? Just reboot.
+My game over screen says "I use Arch, btw".
+A misdrop is just a broken dependency in pactree.
+A T-spin is just editing the PKGBUILD manually.
+Forgetting to hold a piece is like not reading the Arch Wiki.
+A line piece drought is a 404 on the mirrorlist.
+A perfect clear is as satisfying as pacman -Scc.
+My Tetris build fails if I don't run pacman -Syu first.
+I don't get new pieces, I get pacman progress bars.
+My neofetch output includes my Tetris high score.
+A high stack is just a bloated install before bleachbit.
+Game over? Time to rm -rf / --no-preserve-root and reinstall Arch.
+I don't need a hold piece, I have the AUR.
+My Tetris controls are in a .conf file in my home directory.
