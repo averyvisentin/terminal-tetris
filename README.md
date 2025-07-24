@@ -3,7 +3,8 @@
 This is a terminal-based Tetris game written in Python. It aims to be a feature-rich implementation of the classic game with modern mechanics. This project was created for personal use.
 -----
 
-![screenshot](https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/main-menu.png) ![https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/settings.png)
+![screenshot](https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/main-menu.png) 
+![screenshot](https://github.com/averyvisentin/terminal-tetris/blob/master/screenshots/settings.png)
 -----
 
 ## Features
