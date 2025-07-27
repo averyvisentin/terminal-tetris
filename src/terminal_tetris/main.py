@@ -638,7 +638,7 @@ def handle_input(term: Terminal, game: Game):
         save_game_state(game)
         msg = "GAME SAVED"
         print(term.move_xy(SETTINGS['PLAYFIELD_X_OFFSET'] + SETTINGS['BOARD_WIDTH'] - len(msg)//2, SETTINGS['PLAYFIELD_Y_OFFSET'] + SETTINGS['BOARD_HEIGHT']//2 + 2) + term.black_on_green(msg))
-        sys.stdout.flush()
+        #sys.stdout.flush()
         time.sleep(1)
         game.quit_after_save = True
         game.game_over = True
@@ -682,7 +682,7 @@ def game_loop(term: Terminal, game: Game):
         current_time = time.time()
         if (current_time - last_render_time) * 1000 >= SETTINGS['RENDER_THROTTLE_MS']:
             draw_game_state(term, game)
-            sys.stdout.flush()
+            #sys.stdout.flush()
             last_render_time = current_time
 
 def handle_game_over(term, game):
@@ -954,7 +954,7 @@ def show_main_menu(term: Terminal, resize_handler):
 
 
 
-        sys.stdout.flush()
+        #sys.stdout.flush()
 
         # Use a timeout to allow the animation loop to run
         key = term.inkey(timeout=0.1)
