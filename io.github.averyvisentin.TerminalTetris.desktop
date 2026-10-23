@@ -1,7 +1,0 @@
-[Desktop Entry]
-Name=Terminal Tetris
-Exec=terminal-tetris
-Icon=io.github.averyvisentin.TerminalTetris
-Type=Application
-Terminal=true
-Categories=Game;ArcadeGame;

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "terminal-tetris"
-version = "0.0.10"
+version = "0.0.12"
 authors = [{ name = "Avery Visentin", email = "averyvisentin@gmail.com" }]
 description = "A feature-rich terminal-based Tetris game written in Python."
 readme = "README.md"
@@ -25,3 +25,12 @@ terminal-tetris = "terminal_tetris.main:main"
 
 [tool.setuptools.package-data]
 terminal_tetris = ["*.txt"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/terminal_tetris/**/*",
+]
+exclude = [
+  "src/terminal_tetris/oldmain.py",
+  "src/terminal_tetris/tetris_error.log",
+]
