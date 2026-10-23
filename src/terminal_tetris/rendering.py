@@ -4,7 +4,7 @@ Terminal helpers: Styles, Screen (flicker-free renderer), GameLayout, drawing fu
 
 import sys
 from dataclasses import dataclass
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from blessed import Terminal
 
@@ -22,8 +22,8 @@ from .constants import (
     PIECE_COLORS,
     SPRINT_TARGET_LINES,
 )
-from .settings import SETTINGS
 from .models import Game, Piece
+from .settings import SETTINGS
 
 
 def text_width(text: str) -> int:
